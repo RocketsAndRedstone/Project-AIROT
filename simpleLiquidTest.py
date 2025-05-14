@@ -7,6 +7,7 @@ def main():
 
     abortThread = threading.Thread(target=checkAbort, args=(vessel,))
     rollThread = threading.Thread(target=rollProgram, args=(vessel,))
+    headingThread = threading.Thread(target=maintainHeading, args=(vessel,))
 
     #engine ignition and pad seperation
     vessel.control.activate_next_stage()
@@ -19,6 +20,8 @@ def main():
     abortThread.start()
 
     rollThread.join()
+    headingThread.start()
+    
     abortThread.join()
 
 def rollProgram(vessel):
@@ -50,6 +53,26 @@ def checkAbort(vessel):
             vessel.control.abort = True
             print("Aborted")
             break
+
+def maintainHeading(vessel):
+    prevError = 0
+    intergral = 0
+    targetHeading = 180
+    dt = 0.25
+    proportinalGain = 0.05
+    intergralGain = 0.05
+    derivGain = 0.05
+    while (vessel.flight().g_force > 0.1):
+        error = targetHeading - vessel.flight().heading
+        proportinal = error
+        intergral = (intergral + error) * dt
+        derivative = (error - prevError) / dt
+        
+        vessel.control.yaw = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+        
+        prevError = error
+        time.sleep(dt)
+    vessel.control.yaw = 0
 
 if __name__ == "__main__":
     main()
