@@ -1,8 +1,10 @@
-import krpc , time , threading
+import krpc , time , threading , queue
 
 def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
+    global hasAborted
+    hasAborted = queue.Queue()
     vessel.control.sas = True
 
     abortThread = threading.Thread(target=checkAbort, args=(vessel,))
@@ -34,6 +36,9 @@ def rollProgram(vessel):
     derivGain = 0.025
 
     while not (targetRoll - 0.15 < vessel.flight().roll < targetRoll + 0.15):
+        if(not hasAborted.empty()):
+            print("aborting roll program")
+            break
         error =   targetRoll - vessel.flight().roll
         proportinal = error
         intergral = (intergral + error) * dt
@@ -52,17 +57,21 @@ def checkAbort(vessel):
         if(vessel.flight().pitch < 35):
             vessel.control.abort = True
             print("Aborted")
+            hasAborted.put("Aborted")
             break
 
 def maintainHeading(vessel):
     prevError = 0
     intergral = 0
-    targetHeading = 180
-    dt = 0.25
+    targetHeading = 360
+    dt = 0.2
     proportinalGain = 0.05
     intergralGain = 0.05
-    derivGain = 0.05
+    derivGain = 0.025
     while (vessel.flight().g_force > 0.1):
+        if(not hasAborted.empty()):
+            print("aborting heading lock")
+            break
         error = targetHeading - vessel.flight().heading
         proportinal = error
         intergral = (intergral + error) * dt
