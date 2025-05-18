@@ -3,13 +3,15 @@ import krpc , time , threading , queue
 def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
-    global hasAborted
+    global hasAborted , inFlight
+    
     hasAborted = queue.Queue()
     vessel.control.sas = True
 
     abortThread = threading.Thread(target=checkAbort, args=(vessel,))
     rollThread = threading.Thread(target=rollProgram, args=(vessel,))
     headingThread = threading.Thread(target=maintainHeading, args=(vessel,))
+    ratesThread =threading.Thread(target=rates, args=(vessel,))   
 
     #engine ignition and pad seperation
     vessel.control.activate_next_stage()
@@ -17,12 +19,17 @@ def main():
     time.sleep(1)
     vessel.control.activate_next_stage()
 
+    inFlight = True
+    ratesThread.start()
+    
     time.sleep(5)    
     rollThread.start()
     abortThread.start()
 
     rollThread.join()
     headingThread.start()
+    headingThread.join()
+    inFlight = False
     
     abortThread.join()
 
@@ -58,13 +65,15 @@ def checkAbort(vessel):
             vessel.control.abort = True
             print("Aborted")
             hasAborted.put("Aborted")
+            inFlight = False
             break
+    vessel.control.toggle_action_group(9)
 
 def maintainHeading(vessel):
     prevError = 0
     intergral = 0
-    targetHeading = 360
-    dt = 0.2
+    targetHeading = 5
+    dt = 0.25
     proportinalGain = 0.05
     intergralGain = 0.05
     derivGain = 0.025
@@ -82,6 +91,30 @@ def maintainHeading(vessel):
         prevError = error
         time.sleep(dt)
     vessel.control.yaw = 0
+    
+def rates(vessel):
+    #use lifo data structure like stack to compare rates?
+    #Might be able to use circular queue
+    sampleRate = 0.125
+    lastPitch = vessel.flight().pitch
+    lastYaw = vessel.flight().heading
+    lastRoll = vessel.flight().roll
+    
+    while(inFlight):        
+        time.sleep(sampleRate)
+        currPitch = vessel.flight().pitch
+        currYaw = vessel.flight().heading
+        currRoll = vessel.flight().roll
+        
+        pitchRate = (currPitch - lastPitch) / sampleRate
+        yawRate = (currYaw - lastYaw) / sampleRate
+        rollRate = (currRoll - lastRoll) / sampleRate
+        
+        lastPitch = currPitch
+        lastYaw = currYaw
+        lastRoll = currRoll
+        
+        print("pitch" , pitchRate ,"yaw" , yawRate , "roll" , rollRate)
 
 if __name__ == "__main__":
     main()
