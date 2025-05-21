@@ -1,11 +1,13 @@
 import krpc , time , threading , queue
+from CircleQueue import CircleQueue
 
 def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
-    global hasAborted , inFlight
+    global hasAborted , inFlight, rollRate
     
     hasAborted = queue.Queue()
+    rollRate = CircleQueue(5)
     vessel.control.sas = True
 
     abortThread = threading.Thread(target=checkAbort, args=(vessel,))
@@ -43,6 +45,7 @@ def rollProgram(vessel):
     derivGain = 0.025
 
     while not (targetRoll - 0.15 < vessel.flight().roll < targetRoll + 0.15):
+        print("Roll Rate" , rollRate.dequeue())
         if(not hasAborted.empty()):
             print("aborting roll program")
             break
@@ -93,8 +96,6 @@ def maintainHeading(vessel):
     vessel.control.yaw = 0
     
 def rates(vessel):
-    #use lifo data structure like stack to compare rates?
-    #Might be able to use circular queue
     sampleRate = 0.125
     lastPitch = vessel.flight().pitch
     lastYaw = vessel.flight().heading
@@ -108,13 +109,11 @@ def rates(vessel):
         
         pitchRate = (currPitch - lastPitch) / sampleRate
         yawRate = (currYaw - lastYaw) / sampleRate
-        rollRate = (currRoll - lastRoll) / sampleRate
+        rollRate.enqueue((currRoll - lastRoll) / sampleRate)
         
         lastPitch = currPitch
         lastYaw = currYaw
         lastRoll = currRoll
-        
-        print("pitch" , pitchRate ,"yaw" , yawRate , "roll" , rollRate)
 
 if __name__ == "__main__":
     main()
