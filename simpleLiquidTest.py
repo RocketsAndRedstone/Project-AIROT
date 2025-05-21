@@ -4,14 +4,16 @@ from CircleQueue import CircleQueue
 def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
-    global hasAborted , inFlight, rollRate
+    global hasAborted , inFlight, rollRate , pitchRate
     
     hasAborted = queue.Queue()
     rollRate = CircleQueue(5)
+    pitchRate = CircleQueue(5)
     vessel.control.sas = True
 
     abortThread = threading.Thread(target=checkAbort, args=(vessel,))
     rollThread = threading.Thread(target=rollProgram, args=(vessel,))
+    gravTurnThread = threading.Thread(target=gravTurn , args=(vessel,))
     headingThread = threading.Thread(target=maintainHeading, args=(vessel,))
     ratesThread =threading.Thread(target=rates, args=(vessel,))   
 
@@ -29,8 +31,10 @@ def main():
     abortThread.start()
 
     rollThread.join()
-    headingThread.start()
-    headingThread.join()
+    gravTurnThread.start()
+    #headingThread.start()
+    #headingThread.join()
+    gravTurnThread.join()
     inFlight = False
     
     abortThread.join()
@@ -45,7 +49,7 @@ def rollProgram(vessel):
     derivGain = 0.025
 
     while not (targetRoll - 0.15 < vessel.flight().roll < targetRoll + 0.15):
-        print("Roll Rate" , rollRate.dequeue())
+       # print("Roll Rate" , rollRate.dequeue())
         if(not hasAborted.empty()):
             print("aborting roll program")
             break
@@ -94,6 +98,28 @@ def maintainHeading(vessel):
         prevError = error
         time.sleep(dt)
     vessel.control.yaw = 0
+
+def gravTurn(vessel):
+    prevError = 0
+    intergral = 0
+    targetRate = -2
+    dt = 0.25
+    proportinalGain = 0.05
+    intergralGain = 0.05
+    derivGain = 0.1
+    while(vessel.resources.has_resource("LiquidFuel")):
+        if(not hasAborted.empty()):
+            print("aborting grav turn")
+            break
+        error = targetRate - pitchRate.dequeue()
+        proportinal = error
+        intergral = (intergral + error) * dt
+        derivative = (error - prevError) / dt
+        
+        vessel.control.pitch = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+        
+        prevError = error
+        time.sleep(dt)
     
 def rates(vessel):
     sampleRate = 0.125
@@ -107,7 +133,7 @@ def rates(vessel):
         currYaw = vessel.flight().heading
         currRoll = vessel.flight().roll
         
-        pitchRate = (currPitch - lastPitch) / sampleRate
+        pitchRate.enqueue((currPitch - lastPitch) / sampleRate)
         yawRate = (currYaw - lastYaw) / sampleRate
         rollRate.enqueue((currRoll - lastRoll) / sampleRate)
         
