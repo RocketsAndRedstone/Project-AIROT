@@ -1,7 +1,6 @@
 import krpc
 from time import sleep
 from threading import Thread
-from queue import Queue
 from CircleQueue import CircleQueue
 
 def main():
@@ -11,7 +10,7 @@ def main():
 
     targetAapoapsis = 75000
     
-    hasAborted = Queue()
+    hasAborted = CircleQueue(3)
     rollRate = CircleQueue(5)
     pitchRate = CircleQueue(5)
     vessel.control.sas = True
@@ -20,7 +19,7 @@ def main():
     rollThread = Thread(target=rollProgram, args=(vessel,))
     gravTurnThread = Thread(target=gravTurn , args=(vessel,))
     headingThread = Thread(target=maintainHeading, args=(vessel,))
-    ratesThread =Thread(target=rates, args=(vessel,))   
+    ratesThread =Thread(target=rates, args=(vessel,))
 
     #engine ignition and pad seperation
     vessel.control.activate_next_stage()
@@ -33,21 +32,24 @@ def main():
     
     sleep(5)    
     rollThread.start()
-    abortThread.start()
-    headingThread.start()
-    gravTurnThread.start()
+  #  abortThread.start()
+    sleep(10)
+    #headingThread.start()
+   # gravTurnThread.start()
     
-    #monitor fuel levels and schedule stageing
-
-
-    #stage and jetison abort tower
+    monitorFuel(vessel)
+    if not hasAborted.peek():
+        vessel.control.activate_next_stage()
+        vessel.control.toggle_action_group(0)
+        monitorFuel(vessel)
+        vessel.control.activate_next_stage()
 
     rollThread.join()
-    headingThread.join()
-    gravTurnThread.join()
+   # headingThread.join()
+   # gravTurnThread.join()
     inFlight = False
     
-    abortThread.join()
+   # abortThread.join()
 
 def rollProgram(vessel):
     prevError = 0
@@ -59,8 +61,7 @@ def rollProgram(vessel):
     derivGain = 0.025
 
     while (inFlight):
-       # print("Roll Rate" , rollRate.dequeue())
-        if(not hasAborted.empty()):
+        if(hasAborted.peek()):
             print("aborting roll program")
             break
         error =   targetRoll - vessel.flight().roll
@@ -81,10 +82,10 @@ def checkAbort(vessel):
         if(vessel.flight().pitch < 35):
             vessel.control.abort = True
             print("Aborted")
-            hasAborted.put("Aborted")
+            hasAborted.enqueue(True)
             inFlight = False
             break
-    vessel.control.toggle_action_group(9)
+        hasAborted.enqueue(False)
 
 def maintainHeading(vessel):
     prevError = 0
@@ -95,7 +96,7 @@ def maintainHeading(vessel):
     intergralGain = 0.05
     derivGain = 0.025
     while (vessel.flight().g_force > 0.1):
-        if(not hasAborted.empty()):
+        if(hasAborted.peek()):
             print("aborting heading lock")
             break
         error = targetHeading - vessel.flight().heading
@@ -117,8 +118,8 @@ def gravTurn(vessel):
     proportinalGain = 0.05
     intergralGain = 0.05
     derivGain = 0.1
-    while(vessel.resources.has_resource("LiquidFuel")):
-        if(not hasAborted.empty()):
+    while(inFlight):
+        if(hasAborted.peek()):
             print("aborting grav turn")
             break
         error = targetRate - pitchRate.dequeue()
@@ -143,7 +144,7 @@ def rates(vessel):
         currPitch = vessel.flight().pitch
         currYaw = vessel.flight().heading
         currRoll = vessel.flight().roll
-        currVelocity = vessel.flight.speed
+        currVelocity = vessel.flight().speed
         
         pitchRate.enqueue((currPitch - lastPitch) / sampleRate)
         yawRate = (currYaw - lastYaw) / sampleRate
@@ -154,6 +155,11 @@ def rates(vessel):
         lastYaw = currYaw
         lastRoll = currRoll
         lastVelocity = currVelocity
+
+def monitorFuel(vessel):
+    while(vessel.resources.amount("LiquidFuel")):
+        continue
+
 
 if __name__ == "__main__":
     main()
