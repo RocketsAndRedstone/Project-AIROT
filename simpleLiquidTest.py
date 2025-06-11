@@ -6,13 +6,15 @@ from CircleQueue import CircleQueue
 def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
-    global hasAborted , inFlight, rollRate , pitchRate
+    global hasAborted , inFlight, rollRate , pitchRate , currentInput
 
     targetAapoapsis = 75000
     
     hasAborted = CircleQueue(3)
     rollRate = CircleQueue(5)
     pitchRate = CircleQueue(5)
+    #have the output of each controll loop go to a queue to prevent multiple inputs at the same time to damp ossolations?
+    currentInput = CircleQueue(10)
     vessel.control.sas = True
 
     abortThread = Thread(target=checkAbort, args=(vessel,))
@@ -32,33 +34,42 @@ def main():
     
     sleep(5)    
     rollThread.start()
-  #  abortThread.start()
+    abortThread.start()
     sleep(10)
-    #headingThread.start()
-   # gravTurnThread.start()
-    
+   # headingThread.start()
+    #gravTurnThread.start()
+    '''
     monitorFuel(vessel)
-    if not hasAborted.peek():
-        vessel.control.activate_next_stage()
-        vessel.control.toggle_action_group(0)
-        monitorFuel(vessel)
-        vessel.control.activate_next_stage()
+    vessel.control.throttle = 0
+    vessel.control.activate_next_stage()
+    sleep(0.5)
+    vessel.control.throttle = 1
+    sleep(0.5)
+    vessel.control.activate_next_stage()
+    monitorFuel(vessel)
+    sleep(2)
+    vessel.control.activate_next_stage()'''
 
     rollThread.join()
-   # headingThread.join()
-   # gravTurnThread.join()
+    #headingThread.join()
+    #gravTurnThread.join()
     inFlight = False
     
-   # abortThread.join()
+    abortThread.join()
 
 def rollProgram(vessel):
     prevError = 0
     intergral = 0
     targetRoll = -90
     dt = 0.25
-    proportinalGain = 0.05
+    proportinalGain = 0.025
     intergralGain = 0.025
     derivGain = 0.025
+
+    lastOutput = 0
+
+    maxOutput = 1
+    minOutput = -1
 
     while (inFlight):
         if(hasAborted.peek()):
@@ -69,9 +80,24 @@ def rollProgram(vessel):
         intergral = (intergral + error) * dt
         derivative = (error - prevError) / dt
 
-        vessel.control.roll = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+        output = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+        if(abs(output) > 1):
+            if(output < 0):
+                output = minOutput
+            else:
+                output = maxOutput
+
+        if((abs(lastOutput) > 0) and output > 0):
+            maxOutput = 0.15
+            minOutput = -0.15
+            proportinalGain /= 2
+            intergralGain /= 2
+            derivGain /= 2
+
+        vessel.control.roll = output
 
         prevError = error
+        lastOutput = output
         sleep(dt)
     vessel.control.roll = 0
 
@@ -157,9 +183,10 @@ def rates(vessel):
         lastVelocity = currVelocity
 
 def monitorFuel(vessel):
-    while(vessel.resources.amount("LiquidFuel")):
+    while(vessel.resources_in_decouple_stage(vessel.parts.stage,False).amount("LiquidFuel") > 0):
         continue
 
 
 if __name__ == "__main__":
     main()
+    quit()
