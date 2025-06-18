@@ -87,9 +87,12 @@ def rollProgram(vessel):
             else:
                 output = maxOutput
 
-        if((abs(lastOutput) > 0) and output > 0):
-            maxOutput = 0.15
-            minOutput = -0.15
+        if(vessel.flight().roll - 1 < targetRoll < vessel.flight().roll + 1):
+            output = 0
+
+        elif((abs(lastOutput) > 0) and output > 0):
+            maxOutput = 0.3
+            minOutput = -0.3
             proportinalGain /= 2
             intergralGain /= 2
             derivGain /= 2
