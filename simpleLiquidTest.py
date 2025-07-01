@@ -33,11 +33,11 @@ def main():
     ratesThread.start()
     
     sleep(5)    
-    rollThread.start()
+    #rollThread.start()
     abortThread.start()
     sleep(10)
    # headingThread.start()
-    #gravTurnThread.start()
+    gravTurnThread.start()
     '''
     monitorFuel(vessel)
     vessel.control.throttle = 0
@@ -50,9 +50,9 @@ def main():
     sleep(2)
     vessel.control.activate_next_stage()'''
 
-    rollThread.join()
+    #rollThread.join()
     #headingThread.join()
-    #gravTurnThread.join()
+    gravTurnThread.join()
     inFlight = False
     
     abortThread.join()
@@ -87,8 +87,11 @@ def rollProgram(vessel):
             else:
                 output = maxOutput
 
-        if(vessel.flight().roll - 1 < targetRoll < vessel.flight().roll + 1):
+        if((vessel.flight().roll - 1 < targetRoll < vessel.flight().roll + 1) or (abs(output) < 0.001)) :
             output = 0
+            proportinalGain = 0.0125
+            intergralGain = 0.0125
+            derivGain = 0.0125
 
         elif((abs(lastOutput) > 0) and output > 0):
             maxOutput = 0.3
@@ -147,6 +150,15 @@ def gravTurn(vessel):
     proportinalGain = 0.05
     intergralGain = 0.05
     derivGain = 0.1
+    targetAngle = [79 , 68 , 56 , 45 , 34 , 23 , 12 , 0]
+    maxAltitude = [10000 , 20000 , 30000 , 40000 , 50000 , 60000 , 70000 , 80000]
+    altitudeIndex = 0
+
+#Need to rework, having a consistant pitchover rate results in too small of a output and stutters.
+#Possible new solution: have target pitch angles relative to the horizon for set altitudes in 2d array, ex: [[altitude , angle] , [altitude , angle]]
+#have the angles calculated by a mehtod based on a target apoapsis? The altitudes for these angles should stay relativly the same independant of the apoapsis, but without some paramaters if the apoapsis is greater than that altitude
+#for orbital attempts, minimum apoapsis of 70000m, so have each altitude in the list be a multiple of 10000?
+
     while(inFlight):
         if(hasAborted.peek()):
             print("aborting grav turn")
@@ -156,7 +168,22 @@ def gravTurn(vessel):
         intergral = (intergral + error) * dt
         derivative = (error - prevError) / dt
         
-        vessel.control.pitch = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+        output = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+
+        if(vessel.flight().surface_altitude > maxAltitude[altitudeIndex] and (vessel.flight().surface_altitude < maxAltitude[altitudeIndex + 1]) and altitudeIndex < len(maxAltitude)):
+            altitudeIndex += 1
+
+        if(abs(output) > 1):
+            if(output < 0):
+                output = -1
+            else:
+                output = 1
+
+        if((targetAngle[altitudeIndex] - 0.25 < vessel.flight().pitch < targetAngle[altitudeIndex] + 0.25) or abs(output) < 0.001):
+            output = 0
+        
+        vessel.control.pitch = output
+        print(vessel.flight().surface_altitude , maxAltitude[altitudeIndex])
         
         prevError = error
         sleep(dt)
