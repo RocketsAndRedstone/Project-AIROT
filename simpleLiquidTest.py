@@ -147,17 +147,20 @@ def gravTurn(vessel):
     intergral = 0
     targetRate = -2
     dt = 0.25
-    proportinalGain = 0.05
-    intergralGain = 0.05
-    derivGain = 0.1
-    targetAngle = [79 , 68 , 56 , 45 , 34 , 23 , 12 , 0]
-    maxAltitude = [10000 , 20000 , 30000 , 40000 , 50000 , 60000 , 70000 , 80000]
+
+    proportinalGain = 0.025
+    intergralGain = 0.025
+    derivGain = 0.025
+
+    targetAngle = [75 , 45 , 30, 15]
+    maxAltitude = [25000 , 45000 , 60000, 80000]
+
+    minOutput = -1
+    maxOutput = 1
+
     altitudeIndex = 0
 
-#Need to rework, having a consistant pitchover rate results in too small of a output and stutters.
-#Possible new solution: have target pitch angles relative to the horizon for set altitudes in 2d array, ex: [[altitude , angle] , [altitude , angle]]
-#have the angles calculated by a mehtod based on a target apoapsis? The altitudes for these angles should stay relativly the same independant of the apoapsis, but without some paramaters if the apoapsis is greater than that altitude
-#for orbital attempts, minimum apoapsis of 70000m, so have each altitude in the list be a multiple of 10000?
+    lastOutput = 0
 
     while(inFlight):
         if(hasAborted.peek()):
@@ -170,20 +173,36 @@ def gravTurn(vessel):
         
         output = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
 
-        if(vessel.flight().surface_altitude > maxAltitude[altitudeIndex] and (vessel.flight().surface_altitude < maxAltitude[altitudeIndex + 1]) and altitudeIndex < len(maxAltitude)):
-            altitudeIndex += 1
+
+        if (altitudeIndex + 1 < len(maxAltitude)):
+            if(vessel.orbit.apoapsis_altitude > maxAltitude[altitudeIndex] and (vessel.orbit.apoapsis_altitude < maxAltitude[altitudeIndex + 1])):
+                altitudeIndex += 1
+                proportinalGain = 0.025
+                intergralGain = 0.025
+                derivGain = 0.025
 
         if(abs(output) > 1):
             if(output < 0):
-                output = -1
+                output = minOutput
             else:
-                output = 1
+                output = maxOutput
 
-        if((targetAngle[altitudeIndex] - 0.25 < vessel.flight().pitch < targetAngle[altitudeIndex] + 0.25) or abs(output) < 0.001):
+        if((targetAngle[altitudeIndex] - 1 <= vessel.flight().pitch <= targetAngle[altitudeIndex] + 1) or abs(output) < 0.001):
             output = 0
+            proportinalGain = 0.0125
+            intergralGain = 0.0125
+            derivGain = 0.0125
+
+        elif((abs(lastOutput) > 0) and output > 0):
+            maxOutput = 0.3
+            minOutput = -0.3
+            proportinalGain /= 2
+            intergralGain /= 2
+            derivGain /= 2
         
         vessel.control.pitch = output
-        print(vessel.flight().surface_altitude , maxAltitude[altitudeIndex])
+        
+        print(output)
         
         prevError = error
         sleep(dt)
