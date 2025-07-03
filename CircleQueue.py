@@ -9,7 +9,7 @@ class CircleQueue:
     def peek(self):
         if(self.head < self.numElements):
             self.head = self.maxSize -1
-        return self.circle[self.head]
+        return self.circle[self.head - 1]
     
     def enqueue(self,  toAdd):
         if(self.head >= self.maxSize):
@@ -23,7 +23,8 @@ class CircleQueue:
     def dequeue(self):
         if(self.head < self.numElements):
             self.head = self.maxSize -1
-        toReturn  = self.circle[self.head]
+        toReturn  = self.circle[self.head - 1]
+        self.circle[self.head -  1] = None
         self.head -= 1
         self.numElements -= 1
 
