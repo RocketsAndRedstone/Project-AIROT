@@ -21,11 +21,12 @@ class CircleQueue:
         
 
     def dequeue(self):
-        if(self.head < self.numElements):
+        if(self.head - 1 < self.numElements):
             self.head = self.maxSize -1
-        toReturn  = self.circle[self.head - 1]
-        self.circle[self.head -  1] = None
         self.head -= 1
+        toReturn  = self.circle[self.head]
+        self.circle[self.head] = None
+        
         self.numElements -= 1
 
         return toReturn
