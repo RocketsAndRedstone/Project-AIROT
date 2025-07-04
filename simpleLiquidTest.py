@@ -13,6 +13,7 @@ def main():
     hasAborted = CircleQueue(3)
     rollRate = CircleQueue(5)
     pitchRate = CircleQueue(5)
+    inFlight = CircleQueue(3)
     #have the output of each controll loop go to a queue to prevent multiple inputs at the same time to damp ossolations?
     currentInput = CircleQueue(10)
     vessel.control.sas = True
@@ -29,7 +30,7 @@ def main():
     sleep(1)
     vessel.control.activate_next_stage()
 
-    inFlight = True
+    inFlight.enqueue(True)
     ratesThread.start()
     
     sleep(5)    
@@ -38,22 +39,25 @@ def main():
     sleep(10)
    # headingThread.start()
     gravTurnThread.start()
-    '''
-    monitorFuel(vessel)
+
+    
+    monitorFuel(vessel , 4)
     vessel.control.throttle = 0
     vessel.control.activate_next_stage()
     sleep(0.5)
     vessel.control.throttle = 1
     sleep(0.5)
     vessel.control.activate_next_stage()
-    monitorFuel(vessel)
-    sleep(2)
-    vessel.control.activate_next_stage()'''
+    monitorFuel(vessel , 2)
+    vessel.control.throttle = 0
 
     #rollThread.join()
     #headingThread.join()
+    #inFlight.enqueue(False)
+
+    inFlight.enqueue(False)
     gravTurnThread.join()
-    inFlight = False
+    
     
     abortThread.join()
 
@@ -115,7 +119,7 @@ def checkAbort(vessel):
             vessel.control.abort = True
             print("Aborted")
             hasAborted.enqueue(True)
-            inFlight = False
+            inFlight.enqueue(False)
             break
         hasAborted.enqueue(False)
 
@@ -145,15 +149,14 @@ def maintainHeading(vessel):
 def gravTurn(vessel):
     prevError = 0
     intergral = 0
-    targetRate = -2
     dt = 0.25
 
-    proportinalGain = 0.025
-    intergralGain = 0.025
-    derivGain = 0.025
+    proportinalGain = 0.06
+    intergralGain = 0.06
+    derivGain = 0.06
 
-    targetAngle = [75 , 45 , 30, 15]
-    maxAltitude = [25000 , 45000 , 60000, 80000]
+    targetAngle = [75 , 60 ,45 , 30, 15 , 5]
+    maxAltitude = [20000 , 30000 , 40000 , 50000, 60000 , 80000]
 
     minOutput = -1
     maxOutput = 1
@@ -162,11 +165,11 @@ def gravTurn(vessel):
 
     lastOutput = 0
 
-    while(inFlight):
+    while(inFlight.peek()):
         if(hasAborted.peek()):
             print("aborting grav turn")
             break
-        error = targetRate - pitchRate.dequeue()
+        error = targetAngle[altitudeIndex] - vessel.flight().pitch
         proportinal = error
         intergral = (intergral + error) * dt
         derivative = (error - prevError) / dt
@@ -177,34 +180,34 @@ def gravTurn(vessel):
         if (altitudeIndex + 1 < len(maxAltitude)):
             if(vessel.orbit.apoapsis_altitude > maxAltitude[altitudeIndex] and (vessel.orbit.apoapsis_altitude < maxAltitude[altitudeIndex + 1])):
                 altitudeIndex += 1
-                proportinalGain = 0.025
-                intergralGain = 0.025
-                derivGain = 0.025
+                proportinalGain = 0.06
+                intergralGain = 00.6
+                derivGain = 0.06
 
         if(abs(output) > 1):
             if(output < 0):
                 output = minOutput
             else:
-                output = maxOutput
+                output = maxOutput 
 
-        if((targetAngle[altitudeIndex] - 1 <= vessel.flight().pitch <= targetAngle[altitudeIndex] + 1) or abs(output) < 0.001):
+        if((targetAngle[altitudeIndex] - 1 <= vessel.flight().pitch <= targetAngle[altitudeIndex] + 1) or abs(output) < 0.01):
             output = 0
-            proportinalGain = 0.0125
-            intergralGain = 0.0125
-            derivGain = 0.0125
+            proportinalGain = 0.03
+            intergralGain = 0.03
+            derivGain = 0.03
 
         elif((abs(lastOutput) > 0) and output > 0):
-            maxOutput = 0.3
-            minOutput = -0.3
+            maxOutput = 0.5
+            minOutput = -0.5
             proportinalGain /= 2
             intergralGain /= 2
             derivGain /= 2
         
         vessel.control.pitch = output
-        
-        print(output)
-        
+
         prevError = error
+        lastOutput = output
+    
         sleep(dt)
     
 def rates(vessel):
@@ -214,7 +217,7 @@ def rates(vessel):
     lastRoll = vessel.flight().roll
     lastVelocity = vessel.flight().speed
     
-    while(inFlight):        
+    while(inFlight.peek()):        
         sleep(sampleRate)
         currPitch = vessel.flight().pitch
         currYaw = vessel.flight().heading
@@ -231,8 +234,8 @@ def rates(vessel):
         lastRoll = currRoll
         lastVelocity = currVelocity
 
-def monitorFuel(vessel):
-    while(vessel.resources_in_decouple_stage(vessel.parts.stage,False).amount("LiquidFuel") > 0):
+def monitorFuel(vessel, stage):
+    while(vessel.resources_in_decouple_stage(stage,False).amount("LiquidFuel") > 0):
         continue
 
 
