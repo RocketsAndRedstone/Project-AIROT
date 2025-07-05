@@ -61,6 +61,12 @@ def main():
     
     abortThread.join()
 
+    sleep(15)
+
+    vessel.control.activate_next_stage()
+
+    entryDecentLanding(vessel)
+
 def rollProgram(vessel):
     prevError = 0
     intergral = 0
@@ -237,6 +243,24 @@ def rates(vessel):
 def monitorFuel(vessel, stage):
     while(vessel.resources_in_decouple_stage(stage,False).amount("LiquidFuel") > 0):
         continue
+
+def entryDecentLanding(vessel):
+    
+    while(vessel.flight().surface_altitude > 50000):
+        continue
+    
+    vessel.control.sas_mode = vessel.control.sas_mode.retrograde
+
+    while(vessel.flight().surface_altitude > 3000):
+        continue
+
+    vessel.control.activate_next_stage()
+
+    while(vessel.flight().surface_altitude > 1500):
+        continue
+
+    vessel.control.sas_mode = vessel.control.sas_mode.stability_assist
+    vessel.control.activate_next_stage()
 
 
 if __name__ == "__main__":
