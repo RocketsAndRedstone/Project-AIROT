@@ -6,23 +6,17 @@ from CircleQueue import CircleQueue
 def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
-    global hasAborted , inFlight, rollRate , pitchRate , currentInput
-
-    targetAapoapsis = 75000
+    global hasAborted , inFlight , currentInput , turning
     
     hasAborted = CircleQueue(3)
-    rollRate = CircleQueue(5)
-    pitchRate = CircleQueue(5)
     inFlight = CircleQueue(3)
-    #have the output of each controll loop go to a queue to prevent multiple inputs at the same time to damp ossolations?
+    turning = CircleQueue(3)
     currentInput = CircleQueue(10)
     vessel.control.sas = True
 
     abortThread = Thread(target=checkAbort, args=(vessel,))
     rollThread = Thread(target=rollProgram, args=(vessel,))
     gravTurnThread = Thread(target=gravTurn , args=(vessel,))
-    headingThread = Thread(target=maintainHeading, args=(vessel,))
-    ratesThread =Thread(target=rates, args=(vessel,))
 
     #engine ignition and pad seperation
     vessel.control.activate_next_stage()
@@ -31,13 +25,13 @@ def main():
     vessel.control.activate_next_stage()
 
     inFlight.enqueue(True)
-    ratesThread.start()
     
-    sleep(5)    
-    #rollThread.start()
+    sleep(5)
+    turning.enqueue(False)
+    rollThread.start()
     abortThread.start()
-    sleep(10)
-   # headingThread.start()
+    sleep(15)
+    turning.enqueue(True)
     gravTurnThread.start()
 
     
@@ -51,13 +45,10 @@ def main():
     monitorFuel(vessel , 2)
     vessel.control.throttle = 0
 
-    #rollThread.join()
-    #headingThread.join()
-    #inFlight.enqueue(False)
+    rollThread.join()
 
     inFlight.enqueue(False)
     gravTurnThread.join()
-    
     
     abortThread.join()
 
@@ -81,7 +72,7 @@ def rollProgram(vessel):
     maxOutput = 1
     minOutput = -1
 
-    while (inFlight):
+    while (inFlight and not turning.peek()):
         if(hasAborted.peek()):
             print("aborting roll program")
             break
@@ -128,29 +119,6 @@ def checkAbort(vessel):
             inFlight.enqueue(False)
             break
         hasAborted.enqueue(False)
-
-def maintainHeading(vessel):
-    prevError = 0
-    intergral = 0
-    targetHeading = 5
-    dt = 0.25
-    proportinalGain = 0.05
-    intergralGain = 0.05
-    derivGain = 0.025
-    while (vessel.flight().g_force > 0.1):
-        if(hasAborted.peek()):
-            print("aborting heading lock")
-            break
-        error = targetHeading - vessel.flight().heading
-        proportinal = error
-        intergral = (intergral + error) * dt
-        derivative = (error - prevError) / dt
-        
-        vessel.control.yaw = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
-        
-        prevError = error
-        sleep(dt)
-    vessel.control.yaw = 0
 
 def gravTurn(vessel):
     prevError = 0
@@ -215,43 +183,21 @@ def gravTurn(vessel):
         lastOutput = output
     
         sleep(dt)
-    
-def rates(vessel):
-    sampleRate = 0.125
-    lastPitch = vessel.flight().pitch
-    lastYaw = vessel.flight().heading
-    lastRoll = vessel.flight().roll
-    lastVelocity = vessel.flight().speed
-    
-    while(inFlight.peek()):        
-        sleep(sampleRate)
-        currPitch = vessel.flight().pitch
-        currYaw = vessel.flight().heading
-        currRoll = vessel.flight().roll
-        currVelocity = vessel.flight().speed
-        
-        pitchRate.enqueue((currPitch - lastPitch) / sampleRate)
-        yawRate = (currYaw - lastYaw) / sampleRate
-        rollRate.enqueue((currRoll - lastRoll) / sampleRate)
-        verticalAcel = (currVelocity - lastVelocity) / sampleRate
-        
-        lastPitch = currPitch
-        lastYaw = currYaw
-        lastRoll = currRoll
-        lastVelocity = currVelocity
 
 def monitorFuel(vessel, stage):
     while(vessel.resources_in_decouple_stage(stage,False).amount("LiquidFuel") > 0):
         continue
 
 def entryDecentLanding(vessel):
+
+    sleep(30)
     
     while(vessel.flight().surface_altitude > 50000):
         continue
     
     vessel.control.sas_mode = vessel.control.sas_mode.retrograde
 
-    while(vessel.flight().surface_altitude > 3000):
+    while(vessel.flight().surface_altitude > 3500):
         continue
 
     vessel.control.activate_next_stage()
