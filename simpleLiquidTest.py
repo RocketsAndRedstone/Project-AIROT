@@ -237,7 +237,7 @@ def entryDecentLanding(vessel):
     while(vessel.flight().surface_altitude > 4000):
         continue
 
-        #Drouge chute deploy
+    #Drouge chute deploy
     vessel.control.activate_next_stage()
 
     while(vessel.flight().surface_altitude > 1500):
