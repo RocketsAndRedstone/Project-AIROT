@@ -4,16 +4,21 @@ from threading import Thread
 from CircleQueue import CircleQueue
 
 def main():
+    #Initiate connection to KSP and create control point for the rocket.
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
+
     global hasAborted , inFlight , currentInput , turning
     
+    #Initalizes global variables used across active threads
     hasAborted = CircleQueue(3)
     inFlight = CircleQueue(3)
     turning = CircleQueue(3)
-    currentInput = CircleQueue(10)
+
+    #Enables SAS
     vessel.control.sas = True
 
+    #Initializes the threads that control and monitors the rocket
     abortThread = Thread(target=checkAbort, args=(vessel,))
     rollThread = Thread(target=rollProgram, args=(vessel,))
     gravTurnThread = Thread(target=gravTurn , args=(vessel,))
@@ -23,18 +28,20 @@ def main():
     vessel.control.throttle = 1
     sleep(1)
     vessel.control.activate_next_stage()
-
     inFlight.enqueue(True)
     
+    #Starts the roll program and monitoring of the abort condition after pad seperation
     sleep(5)
     turning.enqueue(False)
     rollThread.start()
     abortThread.start()
+
+    #Ends the roll project and starts the gravity turn
     sleep(15)
     turning.enqueue(True)
     gravTurnThread.start()
 
-    
+    #Starts monitoring the fuel levels and initiates staging after the fuel in the first stage runs out
     monitorFuel(vessel , 4)
     vessel.control.throttle = 0
     vessel.control.activate_next_stage()
@@ -42,20 +49,22 @@ def main():
     vessel.control.throttle = 1
     sleep(0.5)
     vessel.control.activate_next_stage()
+
+    #Monitors fuel level and initates SECO
     monitorFuel(vessel , 2)
     vessel.control.throttle = 0
 
+    #Closes the avtive threads as they are no longer needed
     rollThread.join()
-
     inFlight.enqueue(False)
     gravTurnThread.join()
-    
     abortThread.join()
 
+    #Seperates the capsule after SECO to ensure craft stability
     sleep(15)
-
     vessel.control.activate_next_stage()
 
+    #Landing sequence
     entryDecentLanding(vessel)
 
 def rollProgram(vessel):
