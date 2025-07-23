@@ -143,28 +143,33 @@ def checkAbort(vessel):
         hasAborted.enqueue(False)
 
 def gravTurn(vessel):
+    #A PID control loop to set the pitch of the vehicle based off of the structure shown on the PID control loop Wikipedia page
+
+    #Initalize variables used for gravity turn PID loop
     prevError = 0
     intergral = 0
     dt = 0.25
-
     proportinalGain = 0.06
     intergralGain = 0.06
     derivGain = 0.06
+    lastOutput = 0
 
+    #lists to control the target pitch of the craft at set points duting the flight
     targetAngle = [75 , 60 ,45 , 30, 15 , 5]
     maxAltitude = [20000 , 30000 , 40000 , 50000, 60000 , 80000]
+    altitudeIndex = 0
 
+    #limits for the output, KRPC only uses inputs of +- 1
     minOutput = -1
     maxOutput = 1
 
-    altitudeIndex = 0
-
-    lastOutput = 0
-
     while(inFlight.peek()):
+        #Checks if the abort criteria has been violated and ends the control loop
         if(hasAborted.peek()):
             print("aborting grav turn")
             break
+
+        #Calculations to determine the output to get to the desired pitch angle
         error = targetAngle[altitudeIndex] - vessel.flight().pitch
         proportinal = error
         intergral = (intergral + error) * dt
@@ -172,26 +177,30 @@ def gravTurn(vessel):
         
         output = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
 
-
+        #Checks to see if incresing the altitude index would reset the target altitude
         if (altitudeIndex + 1 < len(maxAltitude)):
+            #Increments the index refrence value if the current apoapsis is greater than the current target apoapsis height
             if(vessel.orbit.apoapsis_altitude > maxAltitude[altitudeIndex] and (vessel.orbit.apoapsis_altitude < maxAltitude[altitudeIndex + 1])):
                 altitudeIndex += 1
                 proportinalGain = 0.06
                 intergralGain = 00.6
                 derivGain = 0.06
 
+        #sets the output to the set max/min if calculated value is greater than the set limits
         if(abs(output) > 1):
             if(output < 0):
                 output = minOutput
             else:
                 output = maxOutput 
 
+        #Deadzone for pitch angle and resets gains
         if((targetAngle[altitudeIndex] - 1 <= vessel.flight().pitch <= targetAngle[altitudeIndex] + 1) or abs(output) < 0.01):
             output = 0
             proportinalGain = 0.03
             intergralGain = 0.03
             derivGain = 0.03
 
+        #Decreases gain and max/min output if last input is not 0
         elif((abs(lastOutput) > 0) and output > 0):
             maxOutput = 0.5
             minOutput = -0.5
@@ -201,32 +210,40 @@ def gravTurn(vessel):
         
         vessel.control.pitch = output
 
+        #Resets variables for the next iteration of the loop 
         prevError = error
-        lastOutput = output
-    
+        lastOutput = output    
         sleep(dt)
+    
+    #Sets the output to 0 and outputs the state of the roll at the end of the roll program
+    vessel.control.pitch = 0
+    print("Gravity turn complete")
 
 def monitorFuel(vessel, stage):
+    #Checks if the fuel level in designated stage is not 0
     while(vessel.resources_in_decouple_stage(stage,False).amount("LiquidFuel") > 0):
         continue
 
 def entryDecentLanding(vessel):
+    #Logic for the orientation of the capsule during reentry and the altitudes of when to deploy chutes
 
     sleep(30)
-    
+    #Attitude for reentry
     while(vessel.flight().surface_altitude > 50000):
         continue
     
     vessel.control.sas_mode = vessel.control.sas_mode.retrograde
 
-    while(vessel.flight().surface_altitude > 3500):
+    while(vessel.flight().surface_altitude > 4000):
         continue
 
+        #Drouge chute deploy
     vessel.control.activate_next_stage()
 
     while(vessel.flight().surface_altitude > 1500):
         continue
 
+    #Main chute deploy and sets the attitude to what the craft settles into
     vessel.control.sas_mode = vessel.control.sas_mode.stability_assist
     vessel.control.activate_next_stage()
 
