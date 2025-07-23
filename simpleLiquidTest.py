@@ -3,6 +3,7 @@ from time import sleep
 from threading import Thread
 from CircleQueue import CircleQueue
 
+#A program that controls a rocket on a suborbital trajectory in KSP using the KRPC mod without the use of any autopilot features
 def main():
     #Initiate connection to KSP and create control point for the rocket.
     conn = krpc.connect(name="Launch Liquid 1")
@@ -36,7 +37,7 @@ def main():
     rollThread.start()
     abortThread.start()
 
-    #Ends the roll project and starts the gravity turn
+    #Ends the roll program and starts the gravity turn
     sleep(15)
     turning.enqueue(True)
     gravTurnThread.start()
@@ -68,6 +69,9 @@ def main():
     entryDecentLanding(vessel)
 
 def rollProgram(vessel):
+    #A PID control loop to set the roll of the vehicle based off of the structure shown on the PID control loop Wikipedia page
+
+    #Initalize variables used in the roll PID loop
     prevError = 0
     intergral = 0
     targetRoll = -90
@@ -75,34 +79,41 @@ def rollProgram(vessel):
     proportinalGain = 0.025
     intergralGain = 0.025
     derivGain = 0.025
-
     lastOutput = 0
 
+    #limits for the output, KRPC only uses inputs between +- 1
     maxOutput = 1
     minOutput = -1
 
     while (inFlight and not turning.peek()):
+        #Checks if the abort criteia has been violated and ends the control loop 
         if(hasAborted.peek()):
             print("aborting roll program")
             break
+
+        #Calculations to determine the output to get to the desired roll atitude
         error =   targetRoll - vessel.flight().roll
         proportinal = error
         intergral = (intergral + error) * dt
         derivative = (error - prevError) / dt
 
         output = (proportinalGain * proportinal) + (intergralGain * intergral) + (derivGain * derivative)
+
+        #Sets the output to +- 1 or +- 0.3 if calculated value is greater than set limit
         if(abs(output) > 1):
             if(output < 0):
                 output = minOutput
             else:
                 output = maxOutput
 
+        #Sets deadzone and resets gain
         if((vessel.flight().roll - 1 < targetRoll < vessel.flight().roll + 1) or (abs(output) < 0.001)) :
             output = 0
             proportinalGain = 0.0125
             intergralGain = 0.0125
             derivGain = 0.0125
 
+        #Sets the max/min output to +- 0.3 and decreses each gain if the last output is not 0
         elif((abs(lastOutput) > 0) and output > 0):
             maxOutput = 0.3
             minOutput = -0.3
@@ -112,11 +123,13 @@ def rollProgram(vessel):
 
         vessel.control.roll = output
 
+        #resets needed variables for next iteration of the loop
         prevError = error
         lastOutput = output
         sleep(dt)
+    
+    #Sets the output to 0 and outputs the state of the roll at the end of the roll program
     vessel.control.roll = 0
-
     print("roll program complete at" , vessel.flight().roll)
 
 def checkAbort(vessel):
