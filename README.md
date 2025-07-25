@@ -1,4 +1,4 @@
-Project AIROT (Automated Intercept and Rendevous of an Orbital Target) is the code and crafts used learning how to automate the docking of two crafts in the game Kerbal Space Program  
+Project AIROT (Automated Intercept and Rendezvous of an Orbital Target) is the code and crafts used learning how to automate the docking of two crafts in the game Kerbal Space Program  
 A self-imposed limit for this project is a ban on any autopilot feature not availabe to a ingame player (SAS modes are alowed) nesesitating the creation of custom control loops.  
 
 # Mods Used  
