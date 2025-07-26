@@ -28,4 +28,9 @@ The next step in this program was to automate a suborbital flight with a propper
 
 The third step in this program is to automate [this craft](https://github.com/RocketsAndRedstone/Project-AIROT/blob/main/Crafts/Crewed%20Orbital%20Rendezvous%20Craft.craft) into orbit and then calculate the nessasary maneuvers to intercept and  
 then rendevous to a [space station](https://github.com/RocketsAndRedstone/Project-AIROT/blob/main/Crafts/Agena%20Space%20Station.craft) placed into a 100km by 100km orbit using cheats. Some of the calculations and logic for this  
-procedure come from [NASA document 19660023038](https://ntrs.nasa.gov/api/citations/19660023038/downloads/19660023038.pdf).
+procedure come from [NASA document 19660023038](https://ntrs.nasa.gov/api/citations/19660023038/downloads/19660023038.pdf).  
+
+
+
+### AI/LLM Disclaimer  
+No AI or Large Language Model was used to write or plan any part of this project. All aspects of this project are created by a human. No part of this project may be used by any AI or LLM for any reason without the direct and writen permission of RocketsNRedstone.
