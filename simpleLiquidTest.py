@@ -9,7 +9,7 @@ def main():
     conn = krpc.connect(name="Launch Liquid 1")
     vessel = conn.space_center.active_vessel
 
-    global hasAborted , inFlight , currentInput , turning
+    global hasAborted , inFlight , turning
     
     #Initalizes global variables used across active threads
     hasAborted = CircleQueue(3)
