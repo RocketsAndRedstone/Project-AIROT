@@ -12,14 +12,25 @@ def main():
     hasAborted = CircleQueue(1)
     inFlight = CircleQueue(1)
 
+    hasAborted.enqueue(False)
+    inFlight.enqueue(False)
+
 
 def monitorAbort(vessel):
     #TODO add abort criteria for full flight regime untill abort tower sep
     pass
 
 def rollProgram(vessel):
-    #TODO add roll program logic
-    pass
+    loopTime = 0.25
+    rollPid = PID(0.5 , 0.5 , 0.5 , loopTime , 90)
+
+    #figure out better condition for roll PID end
+    while ((vessel.flight().surface_alttude < 500) and (not hasAborted.peek()) and (inFlight.peek())):
+        output = rollPid.updateOutput(vessel.flight().roll)
+        output = rollPid.applyLimits(-1 , 1)
+        output = rollPid.applyDeadzone(0.05)
+        vessel.control.roll = output
+        sleep(loopTime)
 
 def gravTurn(vessel):
     #TODO add logic for smooth and consistant grav turn
