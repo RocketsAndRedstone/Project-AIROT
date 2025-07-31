@@ -15,7 +15,7 @@ class PID:
         proportinal = error
         intergral = (self.intergral + error) * self.loopTime
         derivative = (error - self.prevError) / self.loopTime
-        
+
         self.prevError = error
 
         output = (self.propGain * proportinal) + (self.intGain * intergral) + (self.derivGain * derivative)
@@ -23,14 +23,14 @@ class PID:
 
         return output
     
-    def applyDeadzone(self , deadzoneMargin) -> float:
+    def applyDeadzone(self , deadzoneMargin:float) -> float:
         if ((self.lastOutput - deadzoneMargin) > self.target > (self.lastOutput + deadzoneMargin)):
             self.lastOutput = 0.0
             return 0.0
         else:
             return self.lastOutput
         
-    def applyLimits(self , minOutput , maxOutput) -> float:
+    def applyLimits(self , minOutput:float , maxOutput:float) -> float:
         if (self.lastOutput > maxOutput):
             self.lastOutput = maxOutput
             return self.lastOutput
