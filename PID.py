@@ -13,12 +13,12 @@ class PID:
     def updateOutput(self, currentAttitude) -> float:
         error = self.target - currentAttitude
         proportinal = error
-        intergral = (self.intergral + error) * self.loopTime
+        self.intergral = (self.intergral + error) * self.loopTime
         derivative = (error - self.prevError) / self.loopTime
 
         self.prevError = error
 
-        output = (self.propGain * proportinal) + (self.intGain * intergral) + (self.derivGain * derivative)
+        output = (self.propGain * proportinal) + (self.intGain * self.intergral) + (self.derivGain * derivative)
         self.lastOutput = output
 
         return output
