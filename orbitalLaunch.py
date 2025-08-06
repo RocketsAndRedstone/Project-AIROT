@@ -16,6 +16,7 @@ def main():
 
     rollThread = Thread(target = rollProgram , args=(vessel,))
     pitchAngleThread = Thread(target = calcPitchAngle , args=(vessel,))
+    gravTurnThread = Thread(target = gravTurn , args=(vessel,))
     abortThread = Thread(target = monitorAbort , args=(vessel,))
 
     hasAborted.enqueue(False)
@@ -34,8 +35,10 @@ def main():
     monitorStaging(vessel)
     rollThread.start()
     rollThread.join()
+    gravTurnThread.start()
     abortThread.join()
     pitchAngleThread.join()
+    gravTurnThread.join()
 
 def monitorAbort(vessel):
     while (vessel.flight().surface_altitude < 50000):
@@ -48,21 +51,32 @@ def monitorAbort(vessel):
 
 def rollProgram(vessel):
     loopTime = 0.25
-    rollPid = PID(0.25 , 0.25 , 0.25 , loopTime , -90.0)
+    rollPid = PID(0.15 , 0.1 , 0.05 , loopTime , -30.0)
     #Updates vessel's roll from default 0 degrees
     vessel.control.roll = -1
 
-    #figure out better condition for roll PID end
-    while (( -89 < vessel.flight().roll < -91) and (not hasAborted.peek()) and (inFlight.peek())):
+    while (not(-29 < vessel.flight().roll < -31) and ((not hasAborted.peek()) and (inFlight.peek()))):
         output = rollPid.updateOutput(vessel.flight().roll)
         output = rollPid.applyLimits(-1 , 1)
         output = rollPid.applyDeadzone(0.5)
         vessel.control.roll = output
+        if(abs(output) < 0.01):
+            break
         sleep(loopTime)
 
+    vessel.control.roll = 0
+
 def gravTurn(vessel):
-    #TODO add logic for smooth and consistant grav turn
-    pass
+    loopTime = 0.25
+    turnPID = PID(0.25 , 0.25 , 0.25 , loopTime , targetPitch.peek())
+
+    while((vessel.orbit.apoapsis < 100000) and (not (hasAborted.peek()) and (inFlight.peek()))):
+        print("turning")
+        output = turnPID.updateOutput(vessel.flight().pitch)
+        output = turnPID.applyLimits(-1 , 1)
+        output = turnPID.applyDeadzone(0.5)
+        vessel.control.pitch = output
+        sleep(loopTime)
 
 def headingLock(vessel):
     #TODO add logic to follow a set azumith using yaw for proper orbital insertion
