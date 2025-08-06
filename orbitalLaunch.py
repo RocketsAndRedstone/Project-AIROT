@@ -28,26 +28,35 @@ def main():
     sleep(0.25)
     vessel.control.activate_next_stage()
     pitchAngleThread.start()
+    sleep(0.25)
+    abortThread.start()
     sleep(5)
     monitorStaging(vessel)
-    #rollThread.start()
-    #rollThread.join()
+    rollThread.start()
+    rollThread.join()
+    abortThread.join()
     pitchAngleThread.join()
 
 def monitorAbort(vessel):
-    #TODO add abort criteria for full flight regime untill abort tower sep
-    pass
+    while (vessel.flight().surface_altitude < 50000):
+        if ((targetPitch.peek() - 5)  > vessel.flight().pitch or (vessel.flight().pitch > (targetPitch.peek() + 5))):
+            print("Aborted")
+            hasAborted.enqueue(True)
+            inFlight.enqueue(False)
+            vessel.control.abort = True
+            break
 
 def rollProgram(vessel):
     loopTime = 0.25
     rollPid = PID(0.25 , 0.25 , 0.25 , loopTime , -90.0)
+    #Updates vessel's roll from default 0 degrees
+    vessel.control.roll = -1
 
     #figure out better condition for roll PID end
-    while ((vessel.flight().surface_altitude < 1000) and (not hasAborted.peek()) and (inFlight.peek())):
+    while (( -89 < vessel.flight().roll < -91) and (not hasAborted.peek()) and (inFlight.peek())):
         output = rollPid.updateOutput(vessel.flight().roll)
         output = rollPid.applyLimits(-1 , 1)
         output = rollPid.applyDeadzone(0.5)
-       # print(output)
         vessel.control.roll = output
         sleep(loopTime)
 
@@ -68,7 +77,7 @@ def calcPitchAngle(vessel):
     startLatitude = vessel.flight().latitude
     startLongitude = vessel.flight().longitude
 
-    #fligtht trajectory equation: f(x) = -0.0125x^2 , f'(x) = -0.025x
+    #fligtht trajectory equation: f(x) = -0.001x^2 , f'(x) = -0.002x
 
     while (inFlight.peek() and not hasAborted.peek()):
         relativeLatitude = abs(abs(startLatitude) - abs(vessel.flight().latitude))
@@ -84,9 +93,11 @@ def calcPitchAngle(vessel):
 
         downrangeDistance = ((relativeLatitude ** 2) + (relativeLongitude ** 2)) ** 0.5
         
-        slope = -0.025 * downrangeDistance
+        slope = -0.002 * downrangeDistance
         slope = round(slope , 3)
         slope += 90
+        if (slope <= 0):
+            slope = 0
         targetPitch.enqueue(slope)
         
         sleep(0.25)
