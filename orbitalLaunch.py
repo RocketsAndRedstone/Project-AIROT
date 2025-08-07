@@ -6,39 +6,56 @@ from math import pi
 from PID import PID
 
 def main():
-    conn = krpc.connect(name="Orbital launch control")
-    vessel = conn.space_center.active_vessel
+    try:
+        conn = krpc.connect(name="Orbital launch control")
+        vessel = conn.space_center.active_vessel
 
-    global hasAborted , inFlight , targetPitch
-    targetPitch = CircleQueue(2)
-    hasAborted = CircleQueue(1)
-    inFlight = CircleQueue(1)
+        global CLOCKFREQUENCY , hasAborted , inFlight , targetPitch
+        CLOCKFREQUENCY = 0.25
+        targetPitch = CircleQueue(2)
+        hasAborted = CircleQueue(1)
+        inFlight = CircleQueue(1)
 
-    rollThread = Thread(target = rollProgram , args=(vessel,))
-    pitchAngleThread = Thread(target = calcPitchAngle , args=(vessel,))
-    gravTurnThread = Thread(target = gravTurn , args=(vessel,))
-    abortThread = Thread(target = monitorAbort , args=(vessel,))
+        rollThread = Thread(target = rollProgram , args=(vessel,))
+        pitchAngleThread = Thread(target = calcPitchAngle , args=(vessel,))
+        gravTurnThread = Thread(target = gravTurn , args=(vessel,))
+        abortThread = Thread(target = monitorAbort , args=(vessel,))
 
-    hasAborted.enqueue(False)
-    inFlight.enqueue(False)
+        hasAborted.enqueue(False)
+        inFlight.enqueue(False)
 
-    vessel.control.sas = True
-    vessel.control.throttle = 1
-    vessel.control.activate_next_stage()
-    inFlight.enqueue(True)
-    sleep(0.25)
-    vessel.control.activate_next_stage()
-    pitchAngleThread.start()
-    sleep(0.25)
-    abortThread.start()
-    sleep(5)
-    monitorStaging(vessel)
-    rollThread.start()
-    rollThread.join()
-    gravTurnThread.start()
-    abortThread.join()
-    pitchAngleThread.join()
-    gravTurnThread.join()
+        vessel.control.sas = True
+        vessel.control.throttle = 1
+        vessel.control.activate_next_stage()
+        inFlight.enqueue(True)
+        sleep(CLOCKFREQUENCY)
+        vessel.control.activate_next_stage()
+        pitchAngleThread.start()
+        sleep(CLOCKFREQUENCY)
+        abortThread.start()
+        sleep(5)
+        monitorStaging(vessel)
+        rollThread.start()
+        rollThread.join()
+        gravTurnThread.start()
+        abortThread.join()
+        pitchAngleThread.join()
+        gravTurnThread.join()
+
+    except (KeyboardInterrupt):
+        print("Launch sequence ended")
+
+        if (rollThread.is_alive()):
+            rollThread.join()
+
+        if (pitchAngleThread.is_alive()):
+            rollThread.join()
+        
+        if (gravTurnThread.is_alive()):
+            gravTurnThread.join()
+
+        if (abortThread.is_alive()):
+            abortThread.join()
 
 def monitorAbort(vessel):
     while (vessel.flight().surface_altitude < 50000):
@@ -50,8 +67,7 @@ def monitorAbort(vessel):
             break
 
 def rollProgram(vessel):
-    loopTime = 0.25
-    rollPid = PID(0.15 , 0.1 , 0.05 , loopTime , -30.0)
+    rollPid = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , -30.0)
     #Updates vessel's roll from default 0 degrees
     vessel.control.roll = -1
 
@@ -62,21 +78,20 @@ def rollProgram(vessel):
         vessel.control.roll = output
         if(abs(output) < 0.01):
             break
-        sleep(loopTime)
+        sleep(CLOCKFREQUENCY)
 
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    loopTime = 0.25
-    turnPID = PID(0.25 , 0.25 , 0.25 , loopTime , targetPitch.peek())
+    turnPID = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , targetPitch.peek())
 
-    while((vessel.orbit.apoapsis < 100000) and (not (hasAborted.peek()) and (inFlight.peek()))):
-        print("turning")
+    while((vessel.orbit.apoapsis < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
         output = turnPID.applyDeadzone(0.5)
         vessel.control.pitch = output
-        sleep(loopTime)
+        print(output)
+        sleep(CLOCKFREQUENCY)
 
 def headingLock(vessel):
     #TODO add logic to follow a set azumith using yaw for proper orbital insertion
@@ -109,12 +124,33 @@ def calcPitchAngle(vessel):
         
         slope = -0.002 * downrangeDistance
         slope = round(slope , 3)
-        slope += 90
+        slope += 89
         if (slope <= 0):
             slope = 0
         targetPitch.enqueue(slope)
         
-        sleep(0.25)
+        sleep(CLOCKFREQUENCY)
+
+def abortContigencys(vessel):
+    if(not hasAborted or vessel.orbit.periapsis > 70000):
+        pass
+
+    vessel.control.activate_next_stage()
+    vessel.control.sas = False
+
+    while (vessel.flight().vertical_speed > 0):
+        continue
+
+    while (vessel.flight().surface_altitude > 3000):
+        continue
+
+    vessel.control.activate_next_stage()
+
+    while (vessel.flight().surface_altitude > 2000):
+        continue
+
+    vessel.control.activate_next_stage()
+
 
 if (__name__ == "__main__"):
     main()
