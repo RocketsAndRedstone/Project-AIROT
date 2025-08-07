@@ -41,24 +41,27 @@ def main():
         abortThread.join()
         pitchAngleThread.join()
         gravTurnThread.join()
+        abortContigencys(vessel)
+        
 
     except (KeyboardInterrupt):
+        inFlight.enqueue(False)
         print("Launch sequence ended")
 
-        if (rollThread.is_alive()):
+        if (rollThread.is_alive() and vessel.met > 7):
             rollThread.join()
 
-        if (pitchAngleThread.is_alive()):
-            rollThread.join()
+        if (pitchAngleThread.is_alive() and vessel.met > 0.25):
+            pitchAngleThread.join()
         
-        if (gravTurnThread.is_alive()):
+        if (gravTurnThread.is_alive() and vessel.met > 7):
             gravTurnThread.join()
 
-        if (abortThread.is_alive()):
+        if (abortThread.is_alive() and vessel.met > 1):
             abortThread.join()
 
 def monitorAbort(vessel):
-    while (vessel.flight().surface_altitude < 50000):
+    while (vessel.flight().surface_altitude < 50000 and inFlight.peek()):
         if ((targetPitch.peek() - 5)  > vessel.flight().pitch or (vessel.flight().pitch > (targetPitch.peek() + 5))):
             print("Aborted")
             hasAborted.enqueue(True)
@@ -76,16 +79,16 @@ def rollProgram(vessel):
         output = rollPid.applyLimits(-1 , 1)
         output = rollPid.applyDeadzone(0.5)
         vessel.control.roll = output
-        if(abs(output) < 0.01):
+        if(abs(output) < 0.025):
             break
         sleep(CLOCKFREQUENCY)
 
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.25 , 0.15 , 0.1 , CLOCKFREQUENCY , targetPitch.peek())
 
-    while((vessel.orbit.apoapsis < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
+    while((vessel.orbit.apoapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
         output = turnPID.applyDeadzone(0.5)
@@ -124,7 +127,7 @@ def calcPitchAngle(vessel):
         
         slope = -0.002 * downrangeDistance
         slope = round(slope , 3)
-        slope += 89
+        slope += 85
         if (slope <= 0):
             slope = 0
         targetPitch.enqueue(slope)
@@ -132,24 +135,22 @@ def calcPitchAngle(vessel):
         sleep(CLOCKFREQUENCY)
 
 def abortContigencys(vessel):
-    if(not hasAborted or vessel.orbit.periapsis > 70000):
-        pass
+    if((hasAborted.peek()) and vessel.orbit.periapsis_altitude < 70000):
+        while (vessel.flight().vertical_speed > 0):
+            continue
 
-    vessel.control.activate_next_stage()
-    vessel.control.sas = False
+        vessel.control.activate_next_stage()
+        vessel.control.sas = False
 
-    while (vessel.flight().vertical_speed > 0):
-        continue
+        while (vessel.flight().surface_altitude > 3000):
+            continue
 
-    while (vessel.flight().surface_altitude > 3000):
-        continue
+        vessel.control.activate_next_stage()
 
-    vessel.control.activate_next_stage()
+        while (vessel.flight().surface_altitude > 2000):
+            continue
 
-    while (vessel.flight().surface_altitude > 2000):
-        continue
-
-    vessel.control.activate_next_stage()
+        vessel.control.activate_next_stage()
 
 
 if (__name__ == "__main__"):
