@@ -23,8 +23,8 @@ class PID:
 
         return output
     
-    def applyDeadzone(self , deadzoneMargin:float) -> float:
-        if ((self.lastOutput - deadzoneMargin) > self.target > (self.lastOutput + deadzoneMargin)):
+    def applyDeadzone(self , deadzoneMargin:float , currentAttitude) -> float:
+        if ((self.target - deadzoneMargin) > currentAttitude > (self.target + deadzoneMargin)):
             self.lastOutput = 0.0
             return 0.0
         else:
