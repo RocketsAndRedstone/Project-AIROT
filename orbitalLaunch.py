@@ -43,10 +43,10 @@ def main():
         gravTurnThread.join()
         abortContigencys(vessel)
         
-
     except (KeyboardInterrupt):
+        #TODO fix this exeption not being recognized instantly in other threads
+        print("Ending launch sequence")
         inFlight.enqueue(False)
-        print("Launch sequence ended")
 
         if (rollThread.is_alive() and vessel.met > 7):
             rollThread.join()
@@ -77,21 +77,18 @@ def rollProgram(vessel):
     while (not(-29 < vessel.flight().roll < -31) and ((not hasAborted.peek()) and (inFlight.peek()))):
         output = rollPid.updateOutput(vessel.flight().roll)
         output = rollPid.applyLimits(-1 , 1)
-        output = rollPid.applyDeadzone(0.5)
+        output = rollPid.applyDeadzone(0.5 , vessel.flight().roll)
         vessel.control.roll = output
-        if(abs(output) < 0.025):
-            break
         sleep(CLOCKFREQUENCY)
 
     vessel.control.roll = 0
 
 def gravTurn(vessel):
     turnPID = PID(0.25 , 0.15 , 0.1 , CLOCKFREQUENCY , targetPitch.peek())
-
     while((vessel.orbit.apoapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
-        output = turnPID.applyDeadzone(0.5)
+        output = turnPID.applyDeadzone(0.5 , vessel.flight().pitch)
         vessel.control.pitch = output
         print(output)
         sleep(CLOCKFREQUENCY)
@@ -111,7 +108,7 @@ def calcPitchAngle(vessel):
 
     #fligtht trajectory equation: f(x) = -0.001x^2 , f'(x) = -0.002x
 
-    while (inFlight.peek() and not hasAborted.peek()):
+    while (inFlight.peek() and (not hasAborted.peek())):
         relativeLatitude = abs(abs(startLatitude) - abs(vessel.flight().latitude))
         relativeLongitude = abs(abs(startLongitude) - abs(vessel.flight().longitude))
         
@@ -151,7 +148,6 @@ def abortContigencys(vessel):
             continue
 
         vessel.control.activate_next_stage()
-
 
 if (__name__ == "__main__"):
     main()
