@@ -24,7 +24,7 @@ class PID:
         return output
     
     def applyDeadzone(self , deadzoneMargin:float , currentAttitude) -> float:
-        if ((self.target - deadzoneMargin) > currentAttitude > (self.target + deadzoneMargin)):
+        if ((self.target - deadzoneMargin) < currentAttitude < (self.target + deadzoneMargin)):
             self.lastOutput = 0.0
             return 0.0
         else:
@@ -40,3 +40,6 @@ class PID:
             return self.lastOutput
         
         return self.lastOutput
+    
+    def updateTarget(self , newTarget:float) -> None:
+        self.target = newTarget
