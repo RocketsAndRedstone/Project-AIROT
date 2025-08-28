@@ -3,7 +3,7 @@ from time import sleep
 from threading import Thread , Event
 from signal import signal , SIGINT
 from CircleQueue import CircleQueue
-from math import pi
+from math import pi , cos
 from PID import PID
 
 def main():
@@ -125,8 +125,11 @@ def calcPitchAngle(vessel):
         #radians to meters
         relativeLatitude = relativeLatitude * kerbinRadius
         relativeLongitude = relativeLongitude * kerbinRadius
+        #TODO normalize distance to surface altitude and compinsate for Kerbin's rotation ^, use sidereal day/rotation speed for calculation?
 
         downrangeDistance = ((relativeLatitude ** 2) + (relativeLongitude ** 2)) ** 0.5
+        #compinsate for Kerbin's rotation, Sidereal rotatinal velocity = 174.94 m/s
+        downrangeDistance += 174.94 * vessel.met * cos(vessel.orbit().inclination)
         
         slope = -0.002 * downrangeDistance
         slope = round(slope , 3)
