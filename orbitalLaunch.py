@@ -98,8 +98,19 @@ def gravTurn(vessel):
     vessel.control.pitch = 0
 
 def headingLock(vessel):
-    #TODO add logic to follow a set azumith using yaw for proper orbital insertion
-    pass
+    headingPID = PID(0.25 , 0.15 , 0.1 , CLOCKFREQUENCY , 90)
+
+    while ((vessel.orbit.apoapsis_altituse < 100000) and (not hasAborted.peek())  and inFlight.peek()):
+        if (interuptEvent.is_set()):
+            break        
+        output = headingPID.updateOutput(vessel.flight().yaw)
+        output = headingPID.applyLimits(-1 , 1)
+        output = headingPID.applyDeadzone(0.5 , vessel.flight().yaw)
+        vessel.control.yaw = output
+
+        sleep(CLOCKFREQUENCY)
+
+    vessel.control.yaw = 0
 
 def monitorStaging(vessel):
     #TODO add logic for monitoring when to activate staging
