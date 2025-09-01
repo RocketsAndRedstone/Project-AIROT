@@ -39,7 +39,7 @@ def main():
     sleep(CLOCKFREQUENCY)
     abortThread.start()
     sleep(5)
-    monitorStaging(vessel)
+    staging(vessel , 6)
 
     rollThread.start()
     rollThread.join()
@@ -112,9 +112,16 @@ def headingLock(vessel):
 
     vessel.control.yaw = 0
 
-def monitorStaging(vessel):
-    #TODO add logic for monitoring when to activate staging
-    pass
+def staging(vessel , stage):
+    while (vessel.resources_in_decouple_stage(stage , False).amount("LiquidFuel") > 0):
+        if (interuptEvent.is_set()):
+            break
+        continue
+    
+    vessel.control.throttle = 0
+    sleep(0.25)
+    vessel.control.activate_next_stage()
+    vessel.control.throttle = 1
 
 def calcPitchAngle(vessel):
     kerbinRadius = 600000
