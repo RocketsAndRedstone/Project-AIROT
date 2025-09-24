@@ -19,10 +19,15 @@ def main():
     interuptEvent = Event()
     signal(SIGINT , handler)
 
+    stage = 4
+
     rollThread = Thread(target = rollProgram , args=(vessel,))
+    maintainRollThread = Thread(target = maintainRoll , args=(vessel,))
     pitchAngleThread = Thread(target = calcPitchAngle , args=(vessel,))
     gravTurnThread = Thread(target = gravTurn , args=(vessel,))
+    headingLockThread = Thread(target= headingLock , args=(vessel,))
     abortThread = Thread(target = monitorAbort , args=(vessel,))
+    stageThread = Thread(target = staging , args=(vessel, stage))
 
     hasAborted.enqueue(False)
     inFlight.enqueue(False)
@@ -37,22 +42,26 @@ def main():
 
     pitchAngleThread.start()
     sleep(CLOCKFREQUENCY)
-    abortThread.start()
+    #abortThread.start()
     sleep(5)
-    staging(vessel , 6)
+    
 
     rollThread.start()
     rollThread.join()
 
-    gravTurnThread.start()
-
-    abortThread.join()
+    #gravTurnThread.start()
+    stageThread.start()
+    maintainRollThread.start()
+    headingLockThread.start()
     
+    stageThread.join()
     pitchAngleThread.join()
-    gravTurnThread.join()
+    #gravTurnThread.join()
+    maintainRollThread.join()
+    headingLockThread.join()
     
     abortContigencys(vessel)
-    abortThread.join()
+    #abortThread.join()
 
 def monitorAbort(vessel):
     while (vessel.flight().surface_altitude < 50000 and inFlight.peek()):
@@ -66,7 +75,7 @@ def monitorAbort(vessel):
             break
 
 def rollProgram(vessel):
-    rollPid = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , -30.0)
+    rollPid = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , -30)
     #Updates vessel's roll from default 0 degrees
     vessel.control.roll = -1
 
@@ -76,6 +85,20 @@ def rollProgram(vessel):
         output = rollPid.updateOutput(vessel.flight().roll)
         output = rollPid.applyLimits(-1 , 1)
         output = rollPid.applyDeadzone(0.5 , vessel.flight().roll)
+        vessel.control.roll = output
+        sleep(CLOCKFREQUENCY)
+
+    vessel.control.roll = 0
+
+def maintainRoll(vessel):
+    rollPID = PID(0.125 , 0.1 , 0.05 , CLOCKFREQUENCY , 0)
+
+    while ((vessel.orbit.apoapsis_altitude < 100000) and (not hasAborted.peek()) and inFlight.peek()):
+        if (interuptEvent.is_set()):
+            break
+        output = rollPID.updateOutput(vessel.flight().roll)
+        output = rollPID.applyLimits(-1 , 1)
+        output = rollPID.applyDeadzone(0.5 , vessel.flight().roll)
         vessel.control.roll = output
         sleep(CLOCKFREQUENCY)
 
@@ -92,20 +115,19 @@ def gravTurn(vessel):
         output = turnPID.applyLimits(-1 , 1)
         output = turnPID.applyDeadzone(0.5 , vessel.flight().pitch)
         vessel.control.pitch = output
-        #print(output)
         sleep(CLOCKFREQUENCY)
     
     vessel.control.pitch = 0
 
 def headingLock(vessel):
-    headingPID = PID(0.25 , 0.15 , 0.1 , CLOCKFREQUENCY , 90)
+    headingPID = PID(0.15 , 0.125 , 0.15 , CLOCKFREQUENCY , 90)
 
-    while ((vessel.orbit.apoapsis_altituse < 100000) and (not hasAborted.peek())  and inFlight.peek()):
+    while ((vessel.orbit.apoapsis_altitude < 100000) and (not hasAborted.peek())  and inFlight.peek()):
         if (interuptEvent.is_set()):
             break        
-        output = headingPID.updateOutput(vessel.flight().yaw)
+        output = headingPID.updateOutput(vessel.flight().heading)
         output = headingPID.applyLimits(-1 , 1)
-        output = headingPID.applyDeadzone(0.5 , vessel.flight().yaw)
+        output = headingPID.applyDeadzone(1 , vessel.flight().heading)
         vessel.control.yaw = output
 
         sleep(CLOCKFREQUENCY)
@@ -113,24 +135,27 @@ def headingLock(vessel):
     vessel.control.yaw = 0
 
 def staging(vessel , stage):
-    while (vessel.resources_in_decouple_stage(stage , False).amount("LiquidFuel") > 0):
+    while (vessel.resources_in_decouple_stage(stage , False).amount("LiquidFuel") > 0.5):
         if (interuptEvent.is_set()):
             break
+        sleep(CLOCKFREQUENCY)
         continue
     
     vessel.control.throttle = 0
     sleep(0.25)
     vessel.control.activate_next_stage()
+    sleep(0.25)
     vessel.control.throttle = 1
 
 def calcPitchAngle(vessel):
+    #TODO figure out a better grav turn profile, possibly with waypoints in a list or something
     kerbinRadius = 600000
     startLatitude = vessel.flight().latitude
     startLongitude = vessel.flight().longitude
 
     #fligtht trajectory equation: f(x) = -0.001x^2 , f'(x) = -0.002x
 
-    while (inFlight.peek() and (not hasAborted.peek())):
+    while ((vessel.orbit.apoapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
         if(interuptEvent.is_set()):
             break
         relativeLatitude = abs(abs(startLatitude) - abs(vessel.flight().latitude))
@@ -147,11 +172,11 @@ def calcPitchAngle(vessel):
 
         downrangeDistance = ((relativeLatitude ** 2) + (relativeLongitude ** 2)) ** 0.5
         #compinsate for Kerbin's rotation, Sidereal rotatinal velocity = 174.94 m/s
-        downrangeDistance += 174.94 * vessel.met * cos(vessel.orbit().inclination)
+        downrangeDistance += 174.94 * vessel.met * cos(vessel.orbit.inclination)
         
         slope = -0.002 * downrangeDistance
         slope = round(slope , 3)
-        slope += 85
+        slope += 90
         if (slope <= 0):
             slope = 0
         targetPitch.enqueue(slope)
