@@ -41,30 +41,36 @@ def main():
 
     pitchAngleThread.start()
     sleep(CLOCKFREQUENCY)
-    #abortThread.start()
+    
     sleep(CLOCKFREQUENCY * 20)
 
     rollThread.start()
-    sleep(CLOCKFREQUENCY * 40)   
+    sleep(CLOCKFREQUENCY * 40)
 
-    #gravTurnThread.start()
+    #abortThread.start()
+    
+    gravTurnThread.start()
     sleep(CLOCKFREQUENCY * 4)
     stageThread.start()
     sleep(CLOCKFREQUENCY * 4)
     headingLockThread.start()
-    
+
+    #abortThread.join()
+
     stageThread.join()
     pitchAngleThread.join()
-    #gravTurnThread.join()
+    gravTurnThread.join()
     rollThread.join()
     headingLockThread.join()
     inFlight = False
+
+    vessel.control.throttle = 0
     
     abortContigencys(vessel)
-    #abortThread.join()
+    
 
 def monitorAbort(vessel):
-    while (vessel.flight().surface_altitude < 50000 and inFlight.peek()):
+    while (vessel.orbit.apoapsis_altitude < 70000 and inFlight.peek()):
         if(interuptEvent.is_set()):
                 break
         if ((targetPitch.peek() - 5)  > vessel.flight().pitch or (vessel.flight().pitch > (targetPitch.peek() + 5))):            
@@ -76,12 +82,12 @@ def monitorAbort(vessel):
             break
 
 def rollProgram(vessel):
-    rollPid = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , 0)
+    rollPid = PID(0.105 , 0.1 , 0.05 , CLOCKFREQUENCY , 0)
     vessel.control.yaw = 1
     sleep(CLOCKFREQUENCY * 4)
     vessel.control.yaw = 0
 
-    while (not(-29 > vessel.flight().roll > -31) and ((not hasAborted.peek()) and (inFlight.peek()))):
+    while (vessel.orbit.periapsis_altitude < 100000 and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
             break
         output = rollPid.updateOutput(vessel.flight().roll)
@@ -93,7 +99,8 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.25 , 0.15 , 0.1 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.2 , 0.125 , 0.125 , CLOCKFREQUENCY , targetPitch.peek())
+    stageTwoRelight = True
 
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -101,10 +108,11 @@ def gravTurn(vessel):
         pitchTarget = targetPitch.peek()
         if (vessel.orbit.apoapsis_altitude > 100000):
             pitchTarget = 0
-            if (vessel.orbit.time_to_apoapsis > 30):
+            if (vessel.orbit.time_to_apoapsis > 65 and stageTwoRelight):
                 vessel.control.throttle = 0
             else:
                 vessel.control.throttle = 1
+                stageTwoRelight = False
         turnPID.updateTarget(pitchTarget)
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
@@ -117,7 +125,7 @@ def gravTurn(vessel):
 def headingLock(vessel):
     headingPID = PID(0.15 , 0.125 , 0.15 , CLOCKFREQUENCY , 90)
 
-    while ((vessel.orbit.apoapsis_altitude < 100000) and (not hasAborted.peek())  and inFlight.peek()):
+    while ((vessel.orbit.periapsis_altitude < 100000) and (not hasAborted.peek())  and inFlight.peek()):
         if (interuptEvent.is_set()):
             break        
         output = headingPID.updateOutput(vessel.flight().heading)
@@ -141,46 +149,15 @@ def staging(vessel , stage):
     vessel.control.activate_next_stage()
     sleep(CLOCKFREQUENCY * 2)
     vessel.control.throttle = 1
+    
+    while (vessel.orbit.periapsis_altitude < 0):
+                continue
 
-def calcPitchAngle(vessel):
-    #TODO figure out a better grav turn profile, possibly with waypoints in a list or something
-    kerbinRadius = 600000
-    startLatitude = vessel.flight().latitude
-    startLongitude = vessel.flight().longitude
-
-    #fligtht trajectory equation: f(x) = -0.001x^2 , f'(x) = -0.002x
-
-    while ((vessel.orbit.apoapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
-        if(interuptEvent.is_set()):
-            break
-        relativeLatitude = abs(abs(startLatitude) - abs(vessel.flight().latitude))
-        relativeLongitude = abs(abs(startLongitude) - abs(vessel.flight().longitude))
-        
-        #degrees to radians
-        relativeLatitude = relativeLatitude * (pi / 180)
-        relativeLongitude = relativeLongitude * (pi / 180)
-        
-        #radians to meters
-        relativeLatitude = relativeLatitude * kerbinRadius
-        relativeLongitude = relativeLongitude * kerbinRadius
-        #TODO normalize distance to surface altitude and compinsate for Kerbin's rotation ^, use sidereal day/rotation speed for calculation?
-
-        downrangeDistance = ((relativeLatitude ** 2) + (relativeLongitude ** 2)) ** 0.5
-        #compinsate for Kerbin's rotation, Sidereal rotatinal velocity = 174.94 m/s
-        downrangeDistance += 174.94 * vessel.met * cos(vessel.orbit.inclination)
-        
-        slope = -0.002 * downrangeDistance
-        slope = round(slope , 3)
-        slope += 90
-        if (slope <= 0):
-            slope = 0
-        targetPitch.enqueue(slope)
-        
-        sleep(CLOCKFREQUENCY)
+    vessel.control.activate_next_stage()
 
 def pitchAngle(vessel):
     referenceAltitude = 5000
-    pitch = 90
+    pitch = 70
 
     while ((vessel.orbit.apoapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
         if (interuptEvent.is_set()):
@@ -188,7 +165,7 @@ def pitchAngle(vessel):
         if (vessel.flight().surface_altitude < referenceAltitude):
             targetPitch.enqueue(pitch)
         else:
-            pitch -= 10
+            pitch -= 15
             referenceAltitude += 10000
 
         sleep(CLOCKFREQUENCY)
@@ -210,6 +187,8 @@ def abortContigencys(vessel):
             continue
 
         vessel.control.activate_next_stage()
+
+        
 
 def handler(signum , frame):
     print("interupt received")
