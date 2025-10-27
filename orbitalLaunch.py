@@ -22,8 +22,7 @@ def main():
     stage = 4
 
     rollThread = Thread(target = rollProgram , args=(vessel,))
-    maintainRollThread = Thread(target = maintainRoll , args=(vessel,))
-    pitchAngleThread = Thread(target = calcPitchAngle , args=(vessel,))
+    pitchAngleThread = Thread(target = pitchAngle , args=(vessel,))
     gravTurnThread = Thread(target = gravTurn , args=(vessel,))
     headingLockThread = Thread(target= headingLock , args=(vessel,))
     abortThread = Thread(target = monitorAbort , args=(vessel,))
@@ -43,41 +42,44 @@ def main():
     pitchAngleThread.start()
     sleep(CLOCKFREQUENCY)
     #abortThread.start()
-    sleep(5)
-    
+    sleep(CLOCKFREQUENCY * 20)
 
     rollThread.start()
-    rollThread.join()
+    sleep(CLOCKFREQUENCY * 40)   
 
     #gravTurnThread.start()
+    sleep(CLOCKFREQUENCY * 4)
     stageThread.start()
-    maintainRollThread.start()
+    sleep(CLOCKFREQUENCY * 4)
     headingLockThread.start()
     
     stageThread.join()
     pitchAngleThread.join()
     #gravTurnThread.join()
-    maintainRollThread.join()
+    rollThread.join()
     headingLockThread.join()
+    inFlight = False
     
     abortContigencys(vessel)
     #abortThread.join()
 
 def monitorAbort(vessel):
     while (vessel.flight().surface_altitude < 50000 and inFlight.peek()):
-        if ((targetPitch.peek() - 5)  > vessel.flight().pitch or (vessel.flight().pitch > (targetPitch.peek() + 5))):
-            if(interuptEvent.is_set()):
+        if(interuptEvent.is_set()):
                 break
+        if ((targetPitch.peek() - 5)  > vessel.flight().pitch or (vessel.flight().pitch > (targetPitch.peek() + 5))):            
             print("Aborted")
             hasAborted.enqueue(True)
             inFlight.enqueue(False)
+            vessel.control.pitch = 1
             vessel.control.abort = True
             break
 
 def rollProgram(vessel):
-    rollPid = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , -30)
-    #Updates vessel's roll from default 0 degrees
-    vessel.control.roll = -1
+    rollPid = PID(0.15 , 0.1 , 0.05 , CLOCKFREQUENCY , 0)
+    vessel.control.yaw = 1
+    sleep(CLOCKFREQUENCY * 4)
+    vessel.control.yaw = 0
 
     while (not(-29 > vessel.flight().roll > -31) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -90,27 +92,20 @@ def rollProgram(vessel):
 
     vessel.control.roll = 0
 
-def maintainRoll(vessel):
-    rollPID = PID(0.125 , 0.1 , 0.05 , CLOCKFREQUENCY , 0)
-
-    while ((vessel.orbit.apoapsis_altitude < 100000) and (not hasAborted.peek()) and inFlight.peek()):
-        if (interuptEvent.is_set()):
-            break
-        output = rollPID.updateOutput(vessel.flight().roll)
-        output = rollPID.applyLimits(-1 , 1)
-        output = rollPID.applyDeadzone(0.5 , vessel.flight().roll)
-        vessel.control.roll = output
-        sleep(CLOCKFREQUENCY)
-
-    vessel.control.roll = 0
-
 def gravTurn(vessel):
     turnPID = PID(0.25 , 0.15 , 0.1 , CLOCKFREQUENCY , targetPitch.peek())
 
-    while((vessel.orbit.apoapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
+    while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
             break
-        turnPID.updateTarget(targetPitch.peek())
+        pitchTarget = targetPitch.peek()
+        if (vessel.orbit.apoapsis_altitude > 100000):
+            pitchTarget = 0
+            if (vessel.orbit.time_to_apoapsis > 30):
+                vessel.control.throttle = 0
+            else:
+                vessel.control.throttle = 1
+        turnPID.updateTarget(pitchTarget)
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
         output = turnPID.applyDeadzone(0.5 , vessel.flight().pitch)
@@ -142,9 +137,9 @@ def staging(vessel , stage):
         continue
     
     vessel.control.throttle = 0
-    sleep(0.25)
+    sleep(CLOCKFREQUENCY)
     vessel.control.activate_next_stage()
-    sleep(0.25)
+    sleep(CLOCKFREQUENCY * 2)
     vessel.control.throttle = 1
 
 def calcPitchAngle(vessel):
@@ -181,6 +176,21 @@ def calcPitchAngle(vessel):
             slope = 0
         targetPitch.enqueue(slope)
         
+        sleep(CLOCKFREQUENCY)
+
+def pitchAngle(vessel):
+    referenceAltitude = 5000
+    pitch = 90
+
+    while ((vessel.orbit.apoapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
+        if (interuptEvent.is_set()):
+            break
+        if (vessel.flight().surface_altitude < referenceAltitude):
+            targetPitch.enqueue(pitch)
+        else:
+            pitch -= 10
+            referenceAltitude += 10000
+
         sleep(CLOCKFREQUENCY)
 
 def abortContigencys(vessel):
