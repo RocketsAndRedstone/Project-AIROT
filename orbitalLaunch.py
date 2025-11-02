@@ -27,12 +27,13 @@ def main():
     headingLockThread = Thread(target= headingLock , args=(vessel,))
     abortThread = Thread(target = monitorAbort , args=(vessel,))
     stageThread = Thread(target = staging , args=(vessel, stage))
+    throttleThread = Thread(target=throttleControl , args=(vessel,))
 
     hasAborted.enqueue(False)
     inFlight.enqueue(False)
 
     vessel.control.sas = True
-    vessel.control.throttle = 1
+    throttleThread.start()
     vessel.control.activate_next_stage()
 
     inFlight.enqueue(True)
@@ -64,7 +65,7 @@ def main():
     headingLockThread.join()
     inFlight = False
 
-    vessel.control.throttle = 0
+    throttleThread.join()
     
     abortContigencys(vessel)
     
@@ -99,20 +100,14 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.2 , 0.125 , 0.125 , CLOCKFREQUENCY , targetPitch.peek())
-    stageTwoRelight = True
-
+    turnPID = PID(0.175 , 0.125 , 0.125 , CLOCKFREQUENCY , targetPitch.peek())
+   
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
             break
         pitchTarget = targetPitch.peek()
         if (vessel.orbit.apoapsis_altitude > 100000):
-            pitchTarget = 0
-            if (vessel.orbit.time_to_apoapsis > 65 and stageTwoRelight):
-                vessel.control.throttle = 0
-            else:
-                vessel.control.throttle = 1
-                stageTwoRelight = False
+            pitchTarget = 0 
         turnPID.updateTarget(pitchTarget)
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
@@ -170,6 +165,43 @@ def pitchAngle(vessel):
 
         sleep(CLOCKFREQUENCY)
 
+def throttleControl(vessel):
+    dynamicPressureLast = vessel.flight().dynamic_pressure
+    vessel.control.throttle = 1 
+
+    while (dynamicPressureLast < 25000):
+        dynamicPressureLast = vessel.flight().dynamic_pressure
+        sleep(CLOCKFREQUENCY)
+        continue
+
+    vessel.control.throttle = 0.75
+
+    while (dynamicPressureLast < vessel.flight().dynamic_pressure):
+        dynamicPressureLast = vessel.flight().dynamic_pressure
+        sleep(CLOCKFREQUENCY)
+        continue
+
+    vessel.control.throttle = 1
+
+    while (vessel.orbit.apoapsis_height < 100000):
+         sleep(CLOCKFREQUENCY)
+         continue
+    
+    vessel.control.throttle = 0
+
+    while (vessel.orbit.time_to_apoapsis > 65):
+         sleep(CLOCKFREQUENCY)
+         continue
+    
+    vessel.control.throttle = 1
+
+    while (vessel.orbit.periapsis_height < 100000):
+        sleep(CLOCKFREQUENCY)
+        continue
+
+    vessel.control.throttle = 0
+
+
 def abortContigencys(vessel):
     if((hasAborted.peek()) and vessel.orbit.periapsis_altitude < 70000):
         while (vessel.flight().vertical_speed > 0):
@@ -187,8 +219,6 @@ def abortContigencys(vessel):
             continue
 
         vessel.control.activate_next_stage()
-
-        
 
 def handler(signum , frame):
     print("interupt received")
