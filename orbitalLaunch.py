@@ -83,7 +83,7 @@ def monitorAbort(vessel):
             break
 
 def rollProgram(vessel):
-    rollPid = PID(0.105 , 0.1 , 0.05 , CLOCKFREQUENCY , 0)
+    rollPid = PID(0.15 , 0.125 , 0.175 , CLOCKFREQUENCY , 0)
     vessel.control.yaw = 1
     sleep(CLOCKFREQUENCY * 4)
     vessel.control.yaw = 0
@@ -100,7 +100,7 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.175 , 0.125 , 0.125 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.125 , 0.175 , 0.125 , CLOCKFREQUENCY , targetPitch.peek())
    
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -118,7 +118,7 @@ def gravTurn(vessel):
     vessel.control.pitch = 0
 
 def headingLock(vessel):
-    headingPID = PID(0.15 , 0.125 , 0.15 , CLOCKFREQUENCY , 90)
+    headingPID = PID(0.175 , 0.125 , 0.125 , CLOCKFREQUENCY , 90)
 
     while ((vessel.orbit.periapsis_altitude < 100000) and (not hasAborted.peek())  and inFlight.peek()):
         if (interuptEvent.is_set()):
@@ -145,7 +145,7 @@ def staging(vessel , stage):
     sleep(CLOCKFREQUENCY * 2)
     vessel.control.throttle = 1
     
-    while (vessel.orbit.periapsis_altitude < 0):
+    while (vessel.orbit.periapsis_altitude < -450000):
                 continue
 
     vessel.control.activate_next_stage()
@@ -176,26 +176,25 @@ def throttleControl(vessel):
 
     vessel.control.throttle = 0.75
 
-    while (dynamicPressureLast < vessel.flight().dynamic_pressure):
-        dynamicPressureLast = vessel.flight().dynamic_pressure
+    while (dynamicPressureLast < vessel.flight().static_pressure):
         sleep(CLOCKFREQUENCY)
         continue
 
     vessel.control.throttle = 1
 
-    while (vessel.orbit.apoapsis_height < 100000):
+    while (vessel.orbit.apoapsis_altitude < 100000):
          sleep(CLOCKFREQUENCY)
          continue
     
     vessel.control.throttle = 0
 
-    while (vessel.orbit.time_to_apoapsis > 65):
+    while (vessel.orbit.time_to_apoapsis > 70):
          sleep(CLOCKFREQUENCY)
          continue
     
     vessel.control.throttle = 1
 
-    while (vessel.orbit.periapsis_height < 100000):
+    while (vessel.orbit.periapsis_altitude < 100000):
         sleep(CLOCKFREQUENCY)
         continue
 
