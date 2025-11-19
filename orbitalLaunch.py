@@ -3,7 +3,6 @@ from time import sleep
 from threading import Thread , Event
 from signal import signal , SIGINT
 from CircleQueue import CircleQueue
-from math import pi , cos
 from PID import PID
 
 def main():
@@ -169,32 +168,32 @@ def throttleControl(vessel):
     dynamicPressureLast = vessel.flight().dynamic_pressure
     vessel.control.throttle = 1 
 
-    while (dynamicPressureLast < 25000):
+    while (dynamicPressureLast < 25000 and not interuptEvent.is_set()):
         dynamicPressureLast = vessel.flight().dynamic_pressure
         sleep(CLOCKFREQUENCY)
         continue
 
     vessel.control.throttle = 0.75
 
-    while (dynamicPressureLast < vessel.flight().static_pressure):
+    while (dynamicPressureLast < vessel.flight().static_pressure and not interuptEvent.is_set()):
         sleep(CLOCKFREQUENCY)
         continue
 
     vessel.control.throttle = 1
 
-    while (vessel.orbit.apoapsis_altitude < 100000):
+    while (vessel.orbit.apoapsis_altitude < 100000 and not interuptEvent.is_set()):
          sleep(CLOCKFREQUENCY)
          continue
     
     vessel.control.throttle = 0
 
-    while (vessel.orbit.time_to_apoapsis > 70):
+    while (vessel.orbit.time_to_apoapsis > 70 and not interuptEvent.is_set()):
          sleep(CLOCKFREQUENCY)
          continue
     
     vessel.control.throttle = 1
 
-    while (vessel.orbit.periapsis_altitude < 100000):
+    while (vessel.orbit.periapsis_altitude < 100000 and not interuptEvent.is_set()):
         sleep(CLOCKFREQUENCY)
         continue
 
@@ -203,18 +202,18 @@ def throttleControl(vessel):
 
 def abortContigencys(vessel):
     if((hasAborted.peek()) and vessel.orbit.periapsis_altitude < 70000):
-        while (vessel.flight().vertical_speed > 0):
+        while (vessel.flight().vertical_speed > 0 and not interuptEvent.is_set()):
             continue
 
         vessel.control.activate_next_stage()
         vessel.control.sas = False
 
-        while (vessel.flight().surface_altitude > 3000):
+        while (vessel.flight().surface_altitude > 3000 and not interuptEvent.is_set()):
             continue
 
         vessel.control.activate_next_stage()
 
-        while (vessel.flight().surface_altitude > 2000):
+        while (vessel.flight().surface_altitude > 2000 and not interuptEvent.is_set()):
             continue
 
         vessel.control.activate_next_stage()
