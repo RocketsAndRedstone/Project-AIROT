@@ -99,14 +99,12 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.125 , 0.175 , 0.125 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.12 , 0.12 , 0.12 , CLOCKFREQUENCY , targetPitch.peek())
    
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
             break
         pitchTarget = targetPitch.peek()
-        if (vessel.orbit.apoapsis_altitude > 100000):
-            pitchTarget = 0 
         turnPID.updateTarget(pitchTarget)
         output = turnPID.updateOutput(vessel.flight().pitch)
         output = turnPID.applyLimits(-1 , 1)
@@ -153,14 +151,21 @@ def pitchAngle(vessel):
     referenceAltitude = 5000
     pitch = 70
 
-    while ((vessel.orbit.apoapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
+    while ((vessel.orbit.periapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
         if (interuptEvent.is_set()):
             break
-        if (vessel.flight().surface_altitude < referenceAltitude):
-            targetPitch.enqueue(pitch)
-        else:
-            pitch -= 15
-            referenceAltitude += 10000
+
+        if (vessel.orbit.apoapsis_altitude > 100000):
+            targetPitch.enqueue(0)
+
+        else: 
+            if (vessel.flight().surface_altitude < referenceAltitude):
+                targetPitch.enqueue(pitch)
+
+            else:
+                pitch -= 1
+                targetPitch.enqueue(pitch)
+                referenceAltitude += 1000
 
         sleep(CLOCKFREQUENCY)
 
@@ -179,18 +184,6 @@ def throttleControl(vessel):
         sleep(CLOCKFREQUENCY)
         continue
 
-    vessel.control.throttle = 1
-
-    while (vessel.orbit.apoapsis_altitude < 100000 and not interuptEvent.is_set()):
-         sleep(CLOCKFREQUENCY)
-         continue
-    
-    vessel.control.throttle = 0
-
-    while (vessel.orbit.time_to_apoapsis > 70 and not interuptEvent.is_set()):
-         sleep(CLOCKFREQUENCY)
-         continue
-    
     vessel.control.throttle = 1
 
     while (vessel.orbit.periapsis_altitude < 100000 and not interuptEvent.is_set()):
