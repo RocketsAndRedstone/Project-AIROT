@@ -7,7 +7,7 @@ class CircleQueue:
         self.circle = [None] * maxSize
 
     def peek(self):
-        if(self.head < self.numElements):
+        if(self.head > self.maxSize):
             self.head = self.maxSize -1
         return self.circle[self.head - 1]
     
