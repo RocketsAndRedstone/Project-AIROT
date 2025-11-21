@@ -99,7 +99,7 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.12 , 0.12 , 0.12 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.15 , 0.12 , 0.12 , CLOCKFREQUENCY , targetPitch.peek())
    
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -155,17 +155,15 @@ def pitchAngle(vessel):
         if (interuptEvent.is_set()):
             break
 
-        if (vessel.orbit.apoapsis_altitude > 100000):
-            targetPitch.enqueue(0)
+        if (vessel.flight().surface_altitude < referenceAltitude):
+            targetPitch.enqueue(pitch)
 
-        else: 
-            if (vessel.flight().surface_altitude < referenceAltitude):
-                targetPitch.enqueue(pitch)
-
-            else:
-                pitch -= 1
-                targetPitch.enqueue(pitch)
-                referenceAltitude += 1000
+        else:
+            pitch -= 3
+            if (vessel.orbit.apoapsis_altitude < 100000 and pitch < 0):
+                pitch = 0
+            targetPitch.enqueue(pitch)
+            referenceAltitude += 1000
 
         sleep(CLOCKFREQUENCY)
 
