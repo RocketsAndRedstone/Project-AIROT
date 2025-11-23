@@ -47,7 +47,7 @@ def main():
     rollThread.start()
     sleep(CLOCKFREQUENCY * 40)
 
-    #abortThread.start()
+    abortThread.start()
     
     gravTurnThread.start()
     sleep(CLOCKFREQUENCY * 4)
@@ -55,7 +55,7 @@ def main():
     sleep(CLOCKFREQUENCY * 4)
     headingLockThread.start()
 
-    #abortThread.join()
+    abortThread.join()
 
     stageThread.join()
     pitchAngleThread.join()
@@ -70,15 +70,13 @@ def main():
     
 
 def monitorAbort(vessel):
-    while (vessel.orbit.apoapsis_altitude < 70000 and inFlight.peek()):
+    while (vessel.orbit.periapsis_altitude < -250000 and inFlight.peek()):
         if(interuptEvent.is_set()):
                 break
-        if ((targetPitch.peek() - 5)  > vessel.flight().pitch or (vessel.flight().pitch > (targetPitch.peek() + 5))):            
+        if (vessel.control.abort):            
             print("Aborted")
             hasAborted.enqueue(True)
             inFlight.enqueue(False)
-            vessel.control.pitch = 1
-            vessel.control.abort = True
             break
 
 def rollProgram(vessel):
@@ -99,7 +97,7 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.15 , 0.12 , 0.12 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.19 , 0.155 , 0.15 , CLOCKFREQUENCY , targetPitch.peek())
    
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -142,7 +140,7 @@ def staging(vessel , stage):
     sleep(CLOCKFREQUENCY * 2)
     vessel.control.throttle = 1
     
-    while (vessel.orbit.periapsis_altitude < -450000):
+    while (vessel.orbit.periapsis_altitude < -250000):
                 continue
 
     vessel.control.activate_next_stage()
@@ -159,9 +157,12 @@ def pitchAngle(vessel):
             targetPitch.enqueue(pitch)
 
         else:
+            #apoapsis rapidly rises  after periapsis nears current altitude, lower throttle for better control?
             pitch -= 3
-            if (vessel.orbit.apoapsis_altitude < 100000 and pitch < 0):
-                pitch = 0
+            if (vessel.orbit.apoapsis_altitude < 85000 and pitch < -9):
+                pitch = -9
+            elif (vessel.orbit.apoapsis_altitude > 85000):
+                pitch = -60
             targetPitch.enqueue(pitch)
             referenceAltitude += 1000
 
