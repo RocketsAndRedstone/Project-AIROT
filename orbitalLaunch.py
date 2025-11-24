@@ -97,7 +97,7 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.19 , 0.155 , 0.15 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.5 , 0.2 , 0.15 , CLOCKFREQUENCY , targetPitch.peek())
    
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -146,7 +146,7 @@ def staging(vessel , stage):
     vessel.control.activate_next_stage()
 
 def pitchAngle(vessel):
-    referenceAltitude = 5000
+    referenceAltitude = 7000
     pitch = 70
 
     while ((vessel.orbit.periapsis_altitude < 100000) and (inFlight.peek() and (not hasAborted.peek()))):
@@ -159,12 +159,14 @@ def pitchAngle(vessel):
         else:
             #apoapsis rapidly rises  after periapsis nears current altitude, lower throttle for better control?
             pitch -= 3
-            if (vessel.orbit.apoapsis_altitude < 85000 and pitch < -9):
-                pitch = -9
-            elif (vessel.orbit.apoapsis_altitude > 85000):
-                pitch = -60
+            if (vessel.orbit.apoapsis_altitude < 90000 and pitch < -8):
+                pitch = -8
+            elif (vessel.orbit.apoapsis_altitude > 90000):
+                pitch = -65
+            elif (vessel.orbit.apoapsis_altitude > 110000):
+                pitch = 90
             targetPitch.enqueue(pitch)
-            referenceAltitude += 1000
+            referenceAltitude += 2000
 
         sleep(CLOCKFREQUENCY)
 
@@ -179,13 +181,13 @@ def throttleControl(vessel):
 
     vessel.control.throttle = 0.75
 
-    while (dynamicPressureLast < vessel.flight().static_pressure and not interuptEvent.is_set()):
+    while (dynamicPressureLast < vessel.flight().static_pressure and not (interuptEvent.is_set() or hasAborted.peek())):
         sleep(CLOCKFREQUENCY)
         continue
 
     vessel.control.throttle = 1
 
-    while (vessel.orbit.periapsis_altitude < 100000 and not interuptEvent.is_set()):
+    while (vessel.orbit.apoapsis_altitude < 115000 and not (interuptEvent.is_set() or hasAborted.peek())):
         sleep(CLOCKFREQUENCY)
         continue
 
