@@ -26,7 +26,7 @@ def main():
     headingLockThread = Thread(target= headingLock , args=(vessel,))
     abortThread = Thread(target = monitorAbort , args=(vessel,))
     stageThread = Thread(target = staging , args=(vessel, stage))
-    throttleThread = Thread(target=throttleControl , args=(vessel,))
+    throttleThread = Thread(target=throttleControl , args=(vessel, conn,))
 
     hasAborted.enqueue(False)
     inFlight.enqueue(False)
@@ -97,7 +97,7 @@ def rollProgram(vessel):
     vessel.control.roll = 0
 
 def gravTurn(vessel):
-    turnPID = PID(0.5 , 0.2 , 0.15 , CLOCKFREQUENCY , targetPitch.peek())
+    turnPID = PID(0.5 , 0.25 , 0.15 , CLOCKFREQUENCY , targetPitch.peek())
    
     while((vessel.orbit.periapsis_altitude < 100000) and ((not hasAborted.peek()) and (inFlight.peek()))):
         if(interuptEvent.is_set()):
@@ -164,13 +164,13 @@ def pitchAngle(vessel):
             elif (vessel.orbit.apoapsis_altitude > 90000):
                 pitch = -65
             elif (vessel.orbit.apoapsis_altitude > 110000):
-                pitch = 90
+                pitch = 90                
             targetPitch.enqueue(pitch)
             referenceAltitude += 2000
 
         sleep(CLOCKFREQUENCY)
 
-def throttleControl(vessel):
+def throttleControl(vessel , conn):
     dynamicPressureLast = vessel.flight().dynamic_pressure
     vessel.control.throttle = 1 
 
@@ -191,7 +191,23 @@ def throttleControl(vessel):
         sleep(CLOCKFREQUENCY)
         continue
 
+    vessel.control.throttle = 0    
+    
+    conn.space_center.warp_to((conn.space_center.ut + vessel.orbit.time_to_apoapsis - 20))
+    vessel.control.sas_mode = vessel.control.sas_mode.prograde
+
+    vessel.control.rcs = True
+    
+    sleep(CLOCKFREQUENCY * 60)
+    
+    vessel.control.throttle = 1
+
+    while (vessel.orbit.periapsis_altitude < 115000):
+        sleep(CLOCKFREQUENCY)
+        continue
+
     vessel.control.throttle = 0
+    vessel.control.rcs = False
 
 
 def abortContigencys(vessel):
