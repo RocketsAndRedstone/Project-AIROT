@@ -1,5 +1,6 @@
 class PID:
 
+    #declares and initalizes nessasary values
     def __init__(self , proportinalGain:float , intergralGain:float , derivativeGain:float , loopTime:float , targetAttitude:float):
         self.prevError:float = 0.0
         self.intergral:float = 0.0
@@ -10,6 +11,7 @@ class PID:
         self.loopTime:float = loopTime
         self.target:float = targetAttitude
 
+    #calculates the new output value from the algorithm pseudo code on the PID wikipedia page
     def updateOutput(self, currentAttitude) -> float:
         error = self.target - currentAttitude
         proportinal = error
@@ -23,6 +25,7 @@ class PID:
 
         return output
     
+    #applies a deadzone to the output if within a desired margin
     def applyDeadzone(self , deadzoneMargin:float , currentAttitude) -> float:
         if ((self.target - deadzoneMargin) < currentAttitude < (self.target + deadzoneMargin)):
             self.lastOutput = 0.0
@@ -30,6 +33,7 @@ class PID:
         else:
             return self.lastOutput
         
+    #Limits the output to a spesified boundry
     def applyLimits(self , minOutput:float , maxOutput:float) -> float:
         if (self.lastOutput > maxOutput):
             self.lastOutput = maxOutput
@@ -41,5 +45,6 @@ class PID:
         
         return self.lastOutput
     
+    #updates the target value
     def updateTarget(self , newTarget:float) -> None:
         self.target = newTarget
