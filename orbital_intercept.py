@@ -19,12 +19,13 @@ def main():
         elif (crafts[i].name == "Agena Space Station"):         
             targetCraft = crafts[i]
 
-    print(calculateRelativeAngle(interceptor , targetCraft))
+    #print(calculateRelativeAngle(interceptor , targetCraft))    
     changeOrbitSize(100000 , 150000 , interceptor , conn)
-    print(calculateRelativeAngle(interceptor , targetCraft))
+    matchInclination(interceptor , targetCraft , conn)
+    #print(calculateRelativeAngle(interceptor , targetCraft))
 
 
-#Changes the apopasis and periapsis altitudes while time warping to each burn
+#Changes the apoapasis and periapsis altitudes while time warping to each burn
 def changeOrbitSize(newPeriapsis:float , newApoapsis:float , vessel , conn)->None:
     #Break function for the recursive call
     if ((vessel.orbit.apoapsis_altitude + 1000 > newApoapsis > vessel.orbit.apoapsis_altitude - 1000) and
@@ -49,7 +50,7 @@ def changeOrbitSize(newPeriapsis:float , newApoapsis:float , vessel , conn)->Non
     changeOrbitSize(newPeriapsis, newApoapsis, vessel, conn)
 
 #Changes the apoapsis to the desired height
-def changeApoapsis(vessel, newApoapsis:float)->bool:
+def changeApoapsis(vessel, newApoapsis:float)->None:
     #Checks if the apoapsis needs to be raised or lowered
     if (newApoapsis < vessel.orbit.apoapsis_altitude):
         #Sets propper vessel orientation
@@ -59,7 +60,6 @@ def changeApoapsis(vessel, newApoapsis:float)->bool:
         while (vessel.orbit.apoapsis_altitude > newApoapsis):
             vessel.control.throttle = 0.5
         vessel.control.throttle = 0
-        return True
 
     elif(newApoapsis > vessel.orbit.apoapsis_altitude):
         #Sets the propper vessel orientation
@@ -69,12 +69,9 @@ def changeApoapsis(vessel, newApoapsis:float)->bool:
         while (vessel.orbit.apoapsis_altitude < newApoapsis):
             vessel.control.throttle = 0.5
         vessel.control.throttle = 0
-        return True
-
-    return False
 
 #Changes to periapsis to the desired height
-def changePeriapsis(vessel, newPeriapsis:float)->bool:
+def changePeriapsis(vessel, newPeriapsis:float)->None:
     #Checks if the periapsis needs to be raised or lowered
     if (newPeriapsis < vessel.orbit.periapsis_altitude):
         #Sets propper vessel orientation
@@ -84,7 +81,6 @@ def changePeriapsis(vessel, newPeriapsis:float)->bool:
         while (vessel.orbit.periapsis_altitude > newPeriapsis):
             vessel.control.throttle = 0.5
         vessel.control.throttle = 0
-        return True
 
     elif (newPeriapsis > vessel.orbit.periapsis_altitude):
         #Sets propper vessel orientation
@@ -94,9 +90,6 @@ def changePeriapsis(vessel, newPeriapsis:float)->bool:
         while (vessel.orbit.periapsis_altitude < newPeriapsis):
             vessel.control.throttle = 0.5
         vessel.control.throttle = 0
-        return True
-    
-    return False
 
 
 def calculateRelativeAngle(interceptor, targetCraft) -> float:
@@ -118,6 +111,34 @@ def calculateRelativeAngle(interceptor, targetCraft) -> float:
     relativeAngle = interceptAngle + targetAngle 
 
     return relativeAngle
+
+#Changing the inclination to be within ~0.0001 radian (0.005 degrees)
+def matchInclination(interceptor, targetCraft , conn) -> None:
+    #Time warps to the next node
+    while not (0.00955 > interceptor.flight().latitude > -0.00955):
+        conn.space_center.rails_warp_factor = 4
+    conn.space_center.rails_warp_factor = 0
+
+    #Determines if the ascending or descending node is closser by checking latitude and orients acordingly
+    if (interceptor.flight().latitude > 0):
+        interceptor.control.sas_mode = interceptor.control.sas_mode.normal 
+    else:
+        interceptor.control.sas_mode = interceptor.control.sas_mode.anti_normal
+
+    #waiting for the vessel to orient itself
+    sleep(5)
+
+    #conducts the plane change burn
+    while (math.fabs(interceptor.orbit.inclination - targetCraft.orbit.inclination) > 0.0001):
+        interceptor.control.throttle = 0.25
+    interceptor.control.throttle = 0
+
+#Calculates the seperation between the vessels
+def distance(interceptor, targetCraft) -> float:
+    pass
+    kerbinRadius = 600000
+    #vertical speration
+    seperation_x = math.fabs((interceptor.orbit.radius - kerbinRadius) - (targetCraft.orbit.radius - kerbinRadius))
 
 if (__name__ == "__main__"):
     main()
